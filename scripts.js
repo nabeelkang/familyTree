@@ -10,6 +10,8 @@ const defaultData = {
       id: 1,
       label: "John Carter",
       gender: "male",
+      imageUrl:
+        "https://as1.ftcdn.net/v2/jpg/04/97/66/28/1000_F_497662812_7rGW6PMBJR9AbrKcGgN5S1luXYTjH92i.jpg",
       attributes: {
         lifeStatus: "Alive",
         occupation: "Engineer",
@@ -20,12 +22,16 @@ const defaultData = {
       id: 2,
       label: "Mary Carter",
       gender: "female",
+      imageUrl:
+        "https://as2.ftcdn.net/v2/jpg/14/16/03/35/1000_F_1416033509_ud5Bt37B3E58hEyA10qfpmP5nWg82ozR.jpg",
       attributes: { lifeStatus: "Deceased", address: "45 Maple Ave, Eugene, OR" },
     },
     {
       id: 3,
       label: "Linda Carter",
       gender: "female",
+      imageUrl:
+        "https://as1.ftcdn.net/v2/jpg/14/15/98/22/1000_F_1415982213_5ZWydXIlynLcIC7RZnwokKdfdnkGYtE2.jpg",
       attributes: {
         lifeStatus: "Alive",
         hometown: "Portland",
@@ -36,12 +42,16 @@ const defaultData = {
       id: 4,
       label: "Kevin Carter",
       gender: "male",
+      imageUrl:
+        "https://as1.ftcdn.net/v2/jpg/15/13/67/74/1000_F_1513677460_9ZE0mmpsntQgSTfQwWPpkMa2ToXf94SO.jpg",
       attributes: { lifeStatus: "Alive", address: "102 Garden Ln, Spokane, WA" },
     },
     {
       id: 5,
       label: "Anna Carter",
       gender: "female",
+      imageUrl:
+        "https://as2.ftcdn.net/v2/jpg/15/10/18/95/1000_F_1510189551_ePTgGmk7kBLeeXFKdquoRELJsSvldUao.jpg",
       attributes: {
         lifeStatus: "Alive",
         hobby: "Painting",
@@ -52,6 +62,8 @@ const defaultData = {
       id: 6,
       label: "Paul Carter",
       gender: "male",
+      imageUrl:
+        "https://as2.ftcdn.net/v2/jpg/15/07/83/75/1000_F_1507837582_4PfjhXazq5b6L57hvgrTKh37EScUKrND.webp",
       attributes: { lifeStatus: "Alive", address: "18 Orchard Rd, Salem, OR" },
     },
   ],
@@ -89,6 +101,7 @@ function loadFromStorage() {
             id: node.id,
             label: node.label,
             gender: node.gender,
+            imageUrl: node.image,
             attributes: node.attributes || { lifeStatus: "Alive" },
           })
         ),
@@ -117,6 +130,7 @@ function persistToStorage(data) {
         id: member.id,
         label: member.label,
         gender: member.gender,
+        imageUrl: member.imageUrl,
         attributes: member.attributes,
       })),
       relationships: data.relationships.map((relationship) => ({
@@ -134,6 +148,10 @@ function normalizeMember(member) {
     id: member.id,
     label: member.label,
     gender: member.gender === "male" ? "male" : "female",
+    imageUrl:
+      typeof member.imageUrl === "string" && member.imageUrl.trim()
+        ? member.imageUrl.trim()
+        : "",
     attributes: {
       lifeStatus: member.attributes?.lifeStatus === "Deceased" ? "Deceased" : "Alive",
       ...Object.fromEntries(
@@ -229,7 +247,10 @@ function prepareNode(member) {
     id: member.id,
     label: member.label,
     gender: member.gender,
-    image: createAvatar(member.label, member.gender, isDeceased),
+    image:
+      member.imageUrl && member.imageUrl.trim()
+        ? member.imageUrl.trim()
+        : createAvatar(member.label, member.gender, isDeceased),
     shape: "circularImage",
     borderWidth: 3,
     shadow: {
@@ -310,8 +331,14 @@ function compileAttributes(lifeStatus, customAttributes, address = "") {
 function MemberDetailPanel({ member, onClose }) {
   const hasSelection = Boolean(member);
   const isDeceased = member?.attributes?.lifeStatus === "Deceased";
-  const avatar = hasSelection
+  const fallbackAvatar = hasSelection
     ? createAvatar(member.label, member.gender, isDeceased)
+    : null;
+  const customAvatar = member?.imageUrl?.trim();
+  const avatar = hasSelection
+    ? customAvatar && customAvatar.length > 0
+      ? customAvatar
+      : fallbackAvatar
     : null;
   const address = member?.attributes?.address || "";
   const otherAttributes = hasSelection
@@ -363,6 +390,16 @@ function MemberDetailPanel({ member, onClose }) {
               <Avatar
                 src={avatar}
                 alt={member.label}
+                imgProps={
+                  customAvatar && fallbackAvatar
+                    ? {
+                        onError: (event) => {
+                          event.target.onerror = null;
+                          event.target.src = fallbackAvatar;
+                        },
+                      }
+                    : undefined
+                }
                 sx={{
                   width: 72,
                   height: 72,
@@ -552,6 +589,22 @@ function useNetwork(members, relationships, { onSelectMember } = {}) {
   const edgesRef = React.useRef(null);
   const selectCallbackRef = React.useRef(onSelectMember);
 
+  const fitNetwork = React.useCallback((options = {}) => {
+    if (networkRef.current) {
+      networkRef.current.fit({
+        animation: {
+          duration: 450,
+          easingFunction: "easeInOutCubic",
+        },
+        ...options,
+      });
+    }
+  }, []);
+
+  const redrawNetwork = React.useCallback(() => {
+    networkRef.current?.redraw();
+  }, []);
+
   React.useEffect(() => {
     selectCallbackRef.current = onSelectMember;
   }, [onSelectMember]);
@@ -633,22 +686,31 @@ function useNetwork(members, relationships, { onSelectMember } = {}) {
     network.on("selectNode", handleSelectNode);
     network.on("deselectNode", handleDeselect);
     network.on("click", handleClick);
+    const handleStabilized = () => {
+      network.setOptions({ physics: { enabled: false } });
+    };
+    network.on("stabilized", handleStabilized);
     network.once("stabilized", () => {
-      network.fit({
-        animation: {
-          duration: 450,
-          easingFunction: "easeInOutCubic",
-        },
-      });
+      fitNetwork();
+      handleStabilized();
     });
+
+    const handleResize = () => {
+      window.requestAnimationFrame(() => {
+        fitNetwork({ animation: false });
+      });
+    };
+    window.addEventListener("resize", handleResize);
 
     return () => {
       network.off("selectNode", handleSelectNode);
       network.off("deselectNode", handleDeselect);
       network.off("click", handleClick);
+      network.off("stabilized", handleStabilized);
       network.destroy();
+      window.removeEventListener("resize", handleResize);
     };
-  }, []);
+  }, [fitNetwork]);
 
   React.useEffect(() => {
     if (!nodesRef.current) {
@@ -663,7 +725,17 @@ function useNetwork(members, relationships, { onSelectMember } = {}) {
     if (toRemove.length) {
       nodes.remove(toRemove);
     }
-  }, [members]);
+    if (networkRef.current) {
+      const network = networkRef.current;
+      network.setOptions({ physics: { enabled: true } });
+      const handleOnce = () => {
+        fitNetwork({ animation: false });
+        network.off("stabilized", handleOnce);
+      };
+      network.on("stabilized", handleOnce);
+      network.stabilize();
+    }
+  }, [members, fitNetwork]);
 
   React.useEffect(() => {
     if (!edgesRef.current) {
@@ -678,9 +750,18 @@ function useNetwork(members, relationships, { onSelectMember } = {}) {
     if (toRemove.length) {
       edges.remove(toRemove);
     }
-  }, [relationships]);
+    if (networkRef.current) {
+      const network = networkRef.current;
+      const handleOnce = () => {
+        fitNetwork({ animation: false });
+        network.off("stabilized", handleOnce);
+      };
+      network.on("stabilized", handleOnce);
+      network.stabilize();
+    }
+  }, [relationships, fitNetwork]);
 
-  return containerRef;
+  return { containerRef, fitNetwork, redrawNetwork };
 }
 
 function App() {
@@ -695,6 +776,7 @@ function App() {
   const [memberGender, setMemberGender] = React.useState("female");
   const [memberLifeStatus, setMemberLifeStatus] = React.useState("Alive");
   const [memberAddress, setMemberAddress] = React.useState("");
+  const [memberImageUrl, setMemberImageUrl] = React.useState("");
   const [memberAttributes, setMemberAttributes] = React.useState([]);
   const [memberNameError, setMemberNameError] = React.useState("");
 
@@ -708,9 +790,22 @@ function App() {
   const [editingNameError, setEditingNameError] = React.useState("");
   const [alertMessage, setAlertMessage] = React.useState(null);
 
-  const containerRef = useNetwork(members, relationships, {
-    onSelectMember: setSelectedMemberId,
-  });
+  const { containerRef, fitNetwork, redrawNetwork } = useNetwork(
+    members,
+    relationships,
+    {
+      onSelectMember: setSelectedMemberId,
+    }
+  );
+
+  React.useEffect(() => {
+    if (tab === "graph") {
+      window.requestAnimationFrame(() => {
+        redrawNetwork();
+        fitNetwork();
+      });
+    }
+  }, [tab, fitNetwork, redrawNetwork]);
 
   React.useEffect(() => {
     if (selectedMemberId && !members.some((member) => member.id === selectedMemberId)) {
@@ -765,6 +860,7 @@ function App() {
     setMemberGender("female");
     setMemberLifeStatus("Alive");
     setMemberAddress("");
+    setMemberImageUrl("");
     setMemberAttributes([]);
     setMemberNameError("");
   };
@@ -793,6 +889,7 @@ function App() {
       gender: member.gender,
       lifeStatus: member.attributes?.lifeStatus || "Alive",
       address: member.attributes?.address || "",
+      imageUrl: member.imageUrl || "",
       customAttributes: attributesToCustomList(member.attributes),
     });
     setEditingNameError("");
@@ -869,6 +966,7 @@ function App() {
       id: editingMemberId,
       label: editingMemberDraft.label.trim(),
       gender: editingMemberDraft.gender,
+      imageUrl: editingMemberDraft.imageUrl?.trim() || "",
       attributes: compileAttributes(
         editingMemberDraft.lifeStatus,
         editingMemberDraft.customAttributes,
@@ -896,6 +994,7 @@ function App() {
       id: nextId,
       label: memberName.trim(),
       gender: memberGender,
+      imageUrl: memberImageUrl.trim(),
       attributes: compileAttributes(
         memberLifeStatus,
         memberAttributes,
@@ -1068,19 +1167,75 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ flexGrow: 1, minHeight: "100vh", bgcolor: "#f3f4f6" }}>
-        <AppBar position="static" color="primary" elevation={1}>
-          <Toolbar>
-            <Typography variant="h6" sx={{ flexGrow: 1 }}>
-              Family Tree Studio
-            </Typography>
-            <Typography variant="body2" sx={{ opacity: 0.75 }}>
-              Visualize and enrich your family story
-            </Typography>
+      <Box
+        sx={{
+          flexGrow: 1,
+          minHeight: "100vh",
+          bgcolor: "#f3f4f6",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <AppBar position="sticky" color="primary" elevation={1}>
+          <Toolbar
+            sx={{
+              flexWrap: "wrap",
+              gap: { xs: 1.5, md: 2 },
+              alignItems: { xs: "flex-start", md: "center" },
+              py: { xs: 1.5, md: 1.5 },
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                flexDirection: "column",
+                flexGrow: 1,
+                minWidth: 0,
+              }}
+            >
+              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                Family Tree Studio
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ opacity: 0.8, display: { xs: "none", sm: "block" } }}
+              >
+                Visualize and enrich your family story
+              </Typography>
+            </Box>
+            <Tabs
+              value={tab}
+              onChange={(event, value) => setTab(value)}
+              variant="scrollable"
+              allowScrollButtonsMobile
+              textColor="inherit"
+              indicatorColor="secondary"
+              sx={{
+                ml: { xs: 0, md: 2 },
+                flexShrink: 0,
+                borderRadius: 9999,
+                bgcolor: "rgba(255, 255, 255, 0.12)",
+                px: { xs: 1, sm: 2 },
+                '& .MuiTab-root': {
+                  minHeight: 0,
+                  py: 1,
+                  textTransform: "none",
+                  fontWeight: 500,
+                },
+              }}
+            >
+              <Tab value="graph" label="Graph" />
+              <Tab value="members" label="Members" />
+              <Tab value="relationships" label="Relationships" />
+            </Tabs>
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Container
+          component="main"
+          maxWidth="xl"
+          sx={{ py: { xs: 3, md: 4 }, flexGrow: 1 }}
+        >
           <Grid container spacing={4}>
             <Grid item xs={12} md={4} lg={3}>
               <Stack spacing={3}>
@@ -1134,6 +1289,13 @@ function App() {
                           value={memberAddress}
                           onChange={(event) => setMemberAddress(event.target.value)}
                           placeholder="e.g. 123 Main St, Springfield"
+                          fullWidth
+                        />
+                        <TextField
+                          label="Photo URL"
+                          value={memberImageUrl}
+                          onChange={(event) => setMemberImageUrl(event.target.value)}
+                          placeholder="Paste a link to a portrait"
                           fullWidth
                         />
                         <Divider textAlign="left">Custom Attributes</Divider>
@@ -1276,7 +1438,7 @@ function App() {
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                       Data persists automatically using localStorage in this browser.
                     </Typography>
-                      <ButtonGroup orientation="vertical" fullWidth>
+                    <ButtonGroup orientation="vertical" fullWidth>
                       <Button onClick={handleSaveSnapshot}>
                         Save Snapshot
                       </Button>
@@ -1293,17 +1455,22 @@ function App() {
             <Grid item xs={12} md={8} lg={9}>
               <Card elevation={2} sx={{ height: "100%" }}>
                 <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                  <Tabs
-                    value={tab}
-                    onChange={(event, value) => setTab(value)}
-                    textColor="primary"
-                    indicatorColor="primary"
-                    sx={{ mb: 2 }}
-                  >
-                    <Tab value="graph" label="Graph" />
-                    <Tab value="members" label="Members" />
-                    <Tab value="relationships" label="Relationships" />
-                  </Tabs>
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
+                      {tab === "graph"
+                        ? "Family Graph"
+                        : tab === "members"
+                        ? "Members Directory"
+                        : "Relationship Ledger"}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {tab === "graph"
+                        ? "Explore the family network and tap on people to view their story."
+                        : tab === "members"
+                        ? "Manage profiles, addresses, custom attributes, and portrait photos."
+                        : "Review how everyone is connected across the family tree."}
+                    </Typography>
+                  </Box>
 
                   {tab === "graph" && (
                     <Box
@@ -1356,14 +1523,19 @@ function App() {
                           )}
                           {sortedMembers.map((member) => {
                             const isDeceased = member.attributes?.lifeStatus === "Deceased";
-                            const avatar = createAvatar(
+                            const isEditing = editingMemberId === member.id;
+                            const draft = isEditing && editingMemberDraft ? editingMemberDraft : null;
+                            const draftAttributes = draft ? draft.customAttributes : [];
+                            const fallbackAvatar = createAvatar(
                               member.label,
                               member.gender,
                               isDeceased
                             );
-                            const isEditing = editingMemberId === member.id;
-                            const draft = isEditing && editingMemberDraft ? editingMemberDraft : null;
-                            const draftAttributes = draft ? draft.customAttributes : [];
+                            const avatarSource = (isEditing ? draft?.imageUrl : member.imageUrl)?.trim();
+                            const avatar =
+                              avatarSource && avatarSource.length > 0
+                                ? avatarSource
+                                : fallbackAvatar;
                             const secondaryLine =
                               member.attributes?.address ||
                               member.attributes?.occupation ||
@@ -1376,6 +1548,16 @@ function App() {
                                     <Avatar
                                       src={avatar}
                                       alt={member.label}
+                                      imgProps={
+                                        avatarSource && avatarSource.length > 0
+                                          ? {
+                                              onError: (event) => {
+                                                event.target.onerror = null;
+                                                event.target.src = fallbackAvatar;
+                                              },
+                                            }
+                                          : undefined
+                                      }
                                       sx={{
                                         width: 48,
                                         height: 48,
@@ -1467,6 +1649,15 @@ function App() {
                                         }
                                         onChange={(event) =>
                                           handleEditingDraftChange("address", event.target.value)
+                                        }
+                                        size="small"
+                                        fullWidth
+                                      />
+                                      <TextField
+                                        label="Photo URL"
+                                        value={draft?.imageUrl ?? member.imageUrl ?? ""}
+                                        onChange={(event) =>
+                                          handleEditingDraftChange("imageUrl", event.target.value)
                                         }
                                         size="small"
                                         fullWidth
@@ -1634,6 +1825,29 @@ function App() {
             </Grid>
           </Grid>
         </Container>
+
+        <Box
+          component="footer"
+          sx={{
+            mt: "auto",
+            py: { xs: 3, md: 4 },
+            bgcolor: "#111827",
+            color: "rgba(255, 255, 255, 0.85)",
+          }}
+        >
+          <Container maxWidth="xl">
+            <Typography variant="subtitle1" sx={{ fontWeight: 500 }}>
+              Built with family stories in mind
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ color: "rgba(255, 255, 255, 0.7)", mt: 0.5 }}
+            >
+              Keep your loved ones connected across devices with a responsive,
+              photo-friendly tree.
+            </Typography>
+          </Container>
+        </Box>
 
         {alertMessage && (
           <Alert
