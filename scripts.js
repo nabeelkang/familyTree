@@ -230,6 +230,24 @@ function createAvatar(name, gender, isDeceased) {
   return dataUri;
 }
 
+const emptyAvatarAssets = {
+  avatar: "",
+  fallbackAvatar: "",
+  customAvatar: "",
+  isDeceased: false,
+};
+
+function getMemberAvatarAssets(member) {
+  if (!member) {
+    return emptyAvatarAssets;
+  }
+  const isDeceased = member.attributes?.lifeStatus === "Deceased";
+  const fallbackAvatar = createAvatar(member.label, member.gender, isDeceased);
+  const customAvatar = member.imageUrl?.trim() || "";
+  const avatar = customAvatar ? customAvatar : fallbackAvatar;
+  return { avatar, fallbackAvatar, customAvatar, isDeceased };
+}
+
 function buildTooltip(member) {
   const parts = [`<strong>${escapeHtml(member.label)}</strong>`];
   const attrs = member.attributes || {};
@@ -343,16 +361,9 @@ function compileAttributes(lifeStatus, customAttributes, address = "") {
 
 function MemberDetailPanel({ member, onClose }) {
   const hasSelection = Boolean(member);
-  const isDeceased = member?.attributes?.lifeStatus === "Deceased";
-  const fallbackAvatar = hasSelection
-    ? createAvatar(member.label, member.gender, isDeceased)
-    : null;
-  const customAvatar = member?.imageUrl?.trim();
-  const avatar = hasSelection
-    ? customAvatar && customAvatar.length > 0
-      ? customAvatar
-      : fallbackAvatar
-    : null;
+  const { avatar, fallbackAvatar, customAvatar, isDeceased } = hasSelection
+    ? getMemberAvatarAssets(member)
+    : emptyAvatarAssets;
   const address = member?.attributes?.address || "";
   const otherAttributes = hasSelection
     ? Object.entries(member.attributes || {}).filter(
@@ -536,6 +547,7 @@ const {
   CardContent,
   Stack,
   TextField,
+  InputAdornment,
   Button,
   MenuItem,
   FormControl,
@@ -887,8 +899,52 @@ function App() {
       sortedMembers.map((member) => ({
         id: member.id,
         label: member.label,
+        lifeStatus: member.attributes?.lifeStatus || "Alive",
+        gender: member.gender,
+        ...getMemberAvatarAssets(member),
       })),
     [sortedMembers]
+  );
+
+  const renderMemberOption = React.useCallback(
+    (props, option) => (
+      <li {...props}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
+          <Avatar
+            src={option.avatar}
+            alt={option.label}
+            imgProps={
+              option.customAvatar && option.fallbackAvatar
+                ? {
+                    onError: (event) => {
+                      event.target.onerror = null;
+                      event.target.src = option.fallbackAvatar;
+                    },
+                  }
+                : undefined
+            }
+            sx={{
+              width: 32,
+              height: 32,
+              boxShadow: option.isDeceased
+                ? "0 0 0 2px rgba(156, 163, 175, 0.45)"
+                : "0 0 0 2px rgba(99, 102, 241, 0.35)",
+              filter: option.isDeceased ? "grayscale(0.55)" : "none",
+            }}
+          />
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 500 }} noWrap>
+              {option.label}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap>
+              {option.gender === "male" ? "Male" : "Female"}
+              {` • ${option.lifeStatus}`}
+            </Typography>
+          </Box>
+        </Stack>
+      </li>
+    ),
+    []
   );
 
   const relationshipSecondLabel = React.useMemo(
@@ -1464,13 +1520,56 @@ function App() {
                             setRelationshipFrom(newValue ? newValue.id : "")
                           }
                           isOptionEqualToValue={(option, value) => option.id === value.id}
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              label="First Person"
-                              placeholder="Search family member"
-                            />
-                          )}
+                          renderOption={renderMemberOption}
+                          renderInput={(params) => {
+                            const startAdornment = firstPersonValue?.avatar
+                              ? (
+                                  <>
+                                    <InputAdornment position="start" sx={{ mr: 1 }}>
+                                      <Avatar
+                                        src={firstPersonValue.avatar}
+                                        alt={firstPersonValue.label}
+                                        imgProps={
+                                          firstPersonValue.customAvatar &&
+                                          firstPersonValue.fallbackAvatar
+                                            ? {
+                                                onError: (event) => {
+                                                  event.target.onerror = null;
+                                                  event.target.src =
+                                                    firstPersonValue.fallbackAvatar;
+                                                },
+                                              }
+                                            : undefined
+                                        }
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          boxShadow: firstPersonValue.isDeceased
+                                            ? "0 0 0 2px rgba(156, 163, 175, 0.45)"
+                                            : "0 0 0 2px rgba(99, 102, 241, 0.35)",
+                                          filter: firstPersonValue.isDeceased
+                                            ? "grayscale(0.55)"
+                                            : "none",
+                                        }}
+                                      />
+                                    </InputAdornment>
+                                    {params.InputProps.startAdornment}
+                                  </>
+                                )
+                              : params.InputProps.startAdornment;
+
+                            return (
+                              <TextField
+                                {...params}
+                                label="First Person"
+                                placeholder="Search family member"
+                                InputProps={{
+                                  ...params.InputProps,
+                                  startAdornment,
+                                }}
+                              />
+                            );
+                          }}
                           noOptionsText="No matching member"
                           fullWidth
                           size="small"
@@ -1485,13 +1584,56 @@ function App() {
                             setRelationshipTo(newValue ? newValue.id : "")
                           }
                           isOptionEqualToValue={(option, value) => option.id === value.id}
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              label={relationshipSecondLabel}
-                              placeholder="Search family member"
-                            />
-                          )}
+                          renderOption={renderMemberOption}
+                          renderInput={(params) => {
+                            const startAdornment = secondPersonValue?.avatar
+                              ? (
+                                  <>
+                                    <InputAdornment position="start" sx={{ mr: 1 }}>
+                                      <Avatar
+                                        src={secondPersonValue.avatar}
+                                        alt={secondPersonValue.label}
+                                        imgProps={
+                                          secondPersonValue.customAvatar &&
+                                          secondPersonValue.fallbackAvatar
+                                            ? {
+                                                onError: (event) => {
+                                                  event.target.onerror = null;
+                                                  event.target.src =
+                                                    secondPersonValue.fallbackAvatar;
+                                                },
+                                              }
+                                            : undefined
+                                        }
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          boxShadow: secondPersonValue.isDeceased
+                                            ? "0 0 0 2px rgba(156, 163, 175, 0.45)"
+                                            : "0 0 0 2px rgba(99, 102, 241, 0.35)",
+                                          filter: secondPersonValue.isDeceased
+                                            ? "grayscale(0.55)"
+                                            : "none",
+                                        }}
+                                      />
+                                    </InputAdornment>
+                                    {params.InputProps.startAdornment}
+                                  </>
+                                )
+                              : params.InputProps.startAdornment;
+
+                            return (
+                              <TextField
+                                {...params}
+                                label={relationshipSecondLabel}
+                                placeholder="Search family member"
+                                InputProps={{
+                                  ...params.InputProps,
+                                  startAdornment,
+                                }}
+                              />
+                            );
+                          }}
                           noOptionsText="No matching member"
                           fullWidth
                           size="small"
