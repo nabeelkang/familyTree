@@ -10,37 +10,49 @@ const defaultData = {
       id: 1,
       label: "John Carter",
       gender: "male",
-      attributes: { lifeStatus: "Alive", occupation: "Engineer" },
+      attributes: {
+        lifeStatus: "Alive",
+        occupation: "Engineer",
+        address: "1200 Pine St, Seattle, WA",
+      },
     },
     {
       id: 2,
       label: "Mary Carter",
       gender: "female",
-      attributes: { lifeStatus: "Deceased" },
+      attributes: { lifeStatus: "Deceased", address: "45 Maple Ave, Eugene, OR" },
     },
     {
       id: 3,
       label: "Linda Carter",
       gender: "female",
-      attributes: { lifeStatus: "Alive", hometown: "Portland" },
+      attributes: {
+        lifeStatus: "Alive",
+        hometown: "Portland",
+        address: "300 Riverwalk Dr, Portland, OR",
+      },
     },
     {
       id: 4,
       label: "Kevin Carter",
       gender: "male",
-      attributes: { lifeStatus: "Alive" },
+      attributes: { lifeStatus: "Alive", address: "102 Garden Ln, Spokane, WA" },
     },
     {
       id: 5,
       label: "Anna Carter",
       gender: "female",
-      attributes: { lifeStatus: "Alive", hobby: "Painting" },
+      attributes: {
+        lifeStatus: "Alive",
+        hobby: "Painting",
+        address: "780 Sunset Blvd, Boise, ID",
+      },
     },
     {
       id: 6,
       label: "Paul Carter",
       gender: "male",
-      attributes: { lifeStatus: "Alive" },
+      attributes: { lifeStatus: "Alive", address: "18 Orchard Rd, Salem, OR" },
     },
   ],
   relationships: [
@@ -271,7 +283,7 @@ function createAttributeId() {
 
 function attributesToCustomList(attributes) {
   const entries = Object.entries(attributes || {}).filter(
-    ([key]) => key !== "lifeStatus"
+    ([key]) => key !== "lifeStatus" && key !== "address"
   );
   if (!entries.length) {
     return [];
@@ -279,8 +291,12 @@ function attributesToCustomList(attributes) {
   return entries.map(([key, value]) => ({ id: createAttributeId(), key, value }));
 }
 
-function compileAttributes(lifeStatus, customAttributes) {
+function compileAttributes(lifeStatus, customAttributes, address = "") {
   const attributes = { lifeStatus };
+  const trimmedAddress = address.trim();
+  if (trimmedAddress) {
+    attributes.address = trimmedAddress;
+  }
   customAttributes.forEach((attr) => {
     const key = attr.key.trim();
     const value = attr.value.trim();
@@ -289,6 +305,171 @@ function compileAttributes(lifeStatus, customAttributes) {
     }
   });
   return attributes;
+}
+
+function MemberDetailPanel({ member, onClose }) {
+  const hasSelection = Boolean(member);
+  const isDeceased = member?.attributes?.lifeStatus === "Deceased";
+  const avatar = hasSelection
+    ? createAvatar(member.label, member.gender, isDeceased)
+    : null;
+  const address = member?.attributes?.address || "";
+  const otherAttributes = hasSelection
+    ? Object.entries(member.attributes || {}).filter(
+        ([key]) => key !== "lifeStatus" && key !== "address"
+      )
+    : [];
+  const mapUrl = address
+    ? `https://maps.google.com/maps?q=${encodeURIComponent(address)}&z=13&output=embed`
+    : null;
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        width: { xs: "100%", md: 340 },
+        borderRadius: 3,
+        overflow: "hidden",
+        flexShrink: 0,
+        bgcolor: "#ffffff",
+      }}
+    >
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          px: 2,
+          py: 1.5,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <Typography variant="subtitle1" fontWeight={600}>
+          {hasSelection ? "Member Details" : "Select a Member"}
+        </Typography>
+        {hasSelection && (
+          <Tooltip title="Close details">
+            <IconButton size="small" onClick={onClose}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        )}
+      </Box>
+      <Box sx={{ p: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+        {hasSelection ? (
+          <>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Avatar
+                src={avatar}
+                alt={member.label}
+                sx={{
+                  width: 72,
+                  height: 72,
+                  boxShadow: isDeceased
+                    ? "0 0 0 4px rgba(156, 163, 175, 0.45)"
+                    : "0 0 0 4px rgba(99, 102, 241, 0.35)",
+                  filter: isDeceased ? "grayscale(0.65)" : "none",
+                }}
+              />
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="h6" sx={{ lineHeight: 1.25 }}>
+                  {member.label}
+                </Typography>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  useFlexGap
+                  flexWrap="wrap"
+                  sx={{ mt: 1 }}
+                >
+                  <Chip
+                    label={member.gender === "male" ? "Male" : "Female"}
+                    color={member.gender === "male" ? "primary" : "secondary"}
+                    size="small"
+                  />
+                  {member.attributes?.lifeStatus && (
+                    <Chip
+                      label={`Life: ${member.attributes.lifeStatus}`}
+                      size="small"
+                      color={
+                        member.attributes.lifeStatus === "Deceased"
+                          ? "default"
+                          : "success"
+                      }
+                      variant={
+                        member.attributes.lifeStatus === "Deceased"
+                          ? "outlined"
+                          : "filled"
+                      }
+                    />
+                  )}
+                </Stack>
+              </Box>
+            </Stack>
+            {address && (
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Address
+                </Typography>
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  {address}
+                </Typography>
+                <Box
+                  sx={{
+                    mt: 1.5,
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    boxShadow: 3,
+                    height: 220,
+                  }}
+                >
+                  <iframe
+                    title={`Map for ${member.label}`}
+                    src={mapUrl}
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    allowFullScreen
+                  />
+                </Box>
+              </Box>
+            )}
+            {otherAttributes.length > 0 && (
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Attributes
+                </Typography>
+                <Stack spacing={0.75} sx={{ mt: 1 }}>
+                  {otherAttributes.map(([key, value]) => (
+                    <Box key={key}>
+                      <Typography variant="body2" fontWeight={600}>
+                        {key}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {value || "—"}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
+            )}
+            {!address && otherAttributes.length === 0 && (
+              <Typography variant="body2" color="text.secondary">
+                No additional attributes recorded yet.
+              </Typography>
+            )}
+          </>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Click a person in the graph to view their story and address.
+          </Typography>
+        )}
+      </Box>
+    </Paper>
+  );
 }
 
 const {
@@ -321,10 +502,6 @@ const {
   Chip,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   ButtonGroup,
   Avatar,
   Paper,
@@ -366,12 +543,18 @@ const EditIcon = iconsSource.Edit || fallbackIconFactory("✏️");
 const DeleteIcon = iconsSource.Delete || fallbackIconFactory("🗑️");
 const AddIcon = iconsSource.Add || fallbackIconFactory("＋");
 const CloseIcon = iconsSource.Close || fallbackIconFactory("✖️");
+const CheckIcon = iconsSource.Check || fallbackIconFactory("✔️");
 
-function useNetwork(members, relationships) {
+function useNetwork(members, relationships, { onSelectMember } = {}) {
   const containerRef = React.useRef(null);
   const networkRef = React.useRef(null);
   const nodesRef = React.useRef(null);
   const edgesRef = React.useRef(null);
+  const selectCallbackRef = React.useRef(onSelectMember);
+
+  React.useEffect(() => {
+    selectCallbackRef.current = onSelectMember;
+  }, [onSelectMember]);
 
   React.useEffect(() => {
     if (!containerRef.current) {
@@ -433,6 +616,23 @@ function useNetwork(members, relationships) {
       options
     );
     networkRef.current = network;
+    const handleSelectNode = (params) => {
+      const nodeId = params?.nodes?.[0];
+      if (typeof nodeId !== "undefined") {
+        selectCallbackRef.current?.(nodeId);
+      }
+    };
+    const handleDeselect = () => {
+      selectCallbackRef.current?.(null);
+    };
+    const handleClick = (params) => {
+      if (!params?.nodes?.length) {
+        handleDeselect();
+      }
+    };
+    network.on("selectNode", handleSelectNode);
+    network.on("deselectNode", handleDeselect);
+    network.on("click", handleClick);
     network.once("stabilized", () => {
       network.fit({
         animation: {
@@ -443,6 +643,9 @@ function useNetwork(members, relationships) {
     });
 
     return () => {
+      network.off("selectNode", handleSelectNode);
+      network.off("deselectNode", handleDeselect);
+      network.off("click", handleClick);
       network.destroy();
     };
   }, []);
@@ -480,161 +683,6 @@ function useNetwork(members, relationships) {
   return containerRef;
 }
 
-function MemberEditorDialog({ open, member, onClose, onSave }) {
-  const [name, setName] = React.useState(member?.label || "");
-  const [gender, setGender] = React.useState(member?.gender || "female");
-  const [lifeStatus, setLifeStatus] = React.useState(
-    member?.attributes?.lifeStatus || "Alive"
-  );
-  const [customAttributes, setCustomAttributes] = React.useState(
-    attributesToCustomList(member?.attributes)
-  );
-  const [nameError, setNameError] = React.useState("");
-
-  React.useEffect(() => {
-    if (!open) {
-      return;
-    }
-    setName(member?.label || "");
-    setGender(member?.gender || "female");
-    setLifeStatus(member?.attributes?.lifeStatus || "Alive");
-    setCustomAttributes(attributesToCustomList(member?.attributes));
-    setNameError("");
-  }, [open, member]);
-
-  const handleAttributeChange = (id, field, value) => {
-    setCustomAttributes((prev) =>
-      prev.map((attr) => (attr.id === id ? { ...attr, [field]: value } : attr))
-    );
-  };
-
-  const handleAddAttribute = () => {
-    setCustomAttributes((prev) => [
-      ...prev,
-      { id: createAttributeId(), key: "", value: "" },
-    ]);
-  };
-
-  const handleRemoveAttribute = (id) => {
-    setCustomAttributes((prev) => prev.filter((attr) => attr.id !== id));
-  };
-
-  const handleSave = () => {
-    if (!name.trim()) {
-      setNameError("Name is required");
-      return;
-    }
-    const attributes = compileAttributes(lifeStatus, customAttributes);
-    onSave({
-      ...member,
-      label: name.trim(),
-      gender,
-      attributes,
-    });
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Edit Member</DialogTitle>
-      <DialogContent dividers>
-        <Stack spacing={3} sx={{ mt: 1 }}>
-          <TextField
-            label="Name"
-            value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              if (nameError) {
-                setNameError("");
-              }
-            }}
-            error={Boolean(nameError)}
-            helperText={nameError}
-            fullWidth
-          />
-          <FormControl fullWidth>
-            <InputLabel id="edit-gender-label">Gender</InputLabel>
-            <Select
-              labelId="edit-gender-label"
-              label="Gender"
-              value={gender}
-              onChange={(event) => setGender(event.target.value)}
-            >
-              <MenuItem value="female">Female</MenuItem>
-              <MenuItem value="male">Male</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl fullWidth>
-            <InputLabel id="edit-life-status">Life Status</InputLabel>
-            <Select
-              labelId="edit-life-status"
-              label="Life Status"
-              value={lifeStatus}
-              onChange={(event) => setLifeStatus(event.target.value)}
-            >
-              <MenuItem value="Alive">Alive</MenuItem>
-              <MenuItem value="Deceased">Deceased</MenuItem>
-            </Select>
-          </FormControl>
-          <Box>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-              <Typography variant="subtitle1" fontWeight={600}>
-                Custom Attributes
-              </Typography>
-              <Button
-                size="small"
-                startIcon={<AddIcon fontSize="small" />}
-                onClick={handleAddAttribute}
-              >
-                Add Attribute
-              </Button>
-            </Stack>
-            <Stack spacing={1.5}>
-              {customAttributes.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
-                  No custom attributes yet.
-                </Typography>
-              )}
-              {customAttributes.map((attr) => (
-                <Stack key={attr.id} direction="row" spacing={1} alignItems="center">
-                  <TextField
-                    label="Key"
-                    value={attr.key}
-                    onChange={(event) =>
-                      handleAttributeChange(attr.id, "key", event.target.value)
-                    }
-                    size="small"
-                    sx={{ flex: 1 }}
-                  />
-                  <TextField
-                    label="Value"
-                    value={attr.value}
-                    onChange={(event) =>
-                      handleAttributeChange(attr.id, "value", event.target.value)
-                    }
-                    size="small"
-                    sx={{ flex: 1 }}
-                  />
-                  <Tooltip title="Remove attribute">
-                    <IconButton onClick={() => handleRemoveAttribute(attr.id)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              ))}
-            </Stack>
-          </Box>
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} startIcon={<CloseIcon fontSize="small" />}>Cancel</Button>
-        <Button variant="contained" onClick={handleSave}>
-          Save Changes
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
 function App() {
   const initialData = React.useMemo(() => loadFromStorage(), []);
   const [members, setMembers] = React.useState(initialData.members);
@@ -646,6 +694,7 @@ function App() {
   const [memberName, setMemberName] = React.useState("");
   const [memberGender, setMemberGender] = React.useState("female");
   const [memberLifeStatus, setMemberLifeStatus] = React.useState("Alive");
+  const [memberAddress, setMemberAddress] = React.useState("");
   const [memberAttributes, setMemberAttributes] = React.useState([]);
   const [memberNameError, setMemberNameError] = React.useState("");
 
@@ -653,10 +702,29 @@ function App() {
   const [relationshipFrom, setRelationshipFrom] = React.useState("");
   const [relationshipTo, setRelationshipTo] = React.useState("");
 
-  const [editorState, setEditorState] = React.useState({ open: false, member: null });
+  const [selectedMemberId, setSelectedMemberId] = React.useState(null);
+  const [editingMemberId, setEditingMemberId] = React.useState(null);
+  const [editingMemberDraft, setEditingMemberDraft] = React.useState(null);
+  const [editingNameError, setEditingNameError] = React.useState("");
   const [alertMessage, setAlertMessage] = React.useState(null);
 
-  const containerRef = useNetwork(members, relationships);
+  const containerRef = useNetwork(members, relationships, {
+    onSelectMember: setSelectedMemberId,
+  });
+
+  React.useEffect(() => {
+    if (selectedMemberId && !members.some((member) => member.id === selectedMemberId)) {
+      setSelectedMemberId(null);
+    }
+  }, [members, selectedMemberId]);
+
+  React.useEffect(() => {
+    if (editingMemberId && !members.some((member) => member.id === editingMemberId)) {
+      setEditingMemberId(null);
+      setEditingMemberDraft(null);
+      setEditingNameError("");
+    }
+  }, [members, editingMemberId]);
 
   React.useEffect(() => {
     persistToStorage({ members, relationships });
@@ -671,6 +739,11 @@ function App() {
         },
       }),
     []
+  );
+
+  const selectedMember = React.useMemo(
+    () => members.find((member) => member.id === selectedMemberId) || null,
+    [members, selectedMemberId]
   );
 
   const sortedMembers = React.useMemo(
@@ -691,6 +764,7 @@ function App() {
     setMemberName("");
     setMemberGender("female");
     setMemberLifeStatus("Alive");
+    setMemberAddress("");
     setMemberAttributes([]);
     setMemberNameError("");
   };
@@ -712,6 +786,104 @@ function App() {
     setMemberAttributes((prev) => prev.filter((attr) => attr.id !== id));
   };
 
+  const handleStartEditingMember = (member) => {
+    setEditingMemberId(member.id);
+    setEditingMemberDraft({
+      label: member.label,
+      gender: member.gender,
+      lifeStatus: member.attributes?.lifeStatus || "Alive",
+      address: member.attributes?.address || "",
+      customAttributes: attributesToCustomList(member.attributes),
+    });
+    setEditingNameError("");
+  };
+
+  const handleCancelEditingMember = () => {
+    setEditingMemberId(null);
+    setEditingMemberDraft(null);
+    setEditingNameError("");
+  };
+
+  const handleEditingDraftChange = (field, value) => {
+    setEditingMemberDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      if (field === "label" && editingNameError) {
+        setEditingNameError("");
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const handleAddEditingAttribute = () => {
+    setEditingMemberDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        customAttributes: [
+          ...prev.customAttributes,
+          { id: createAttributeId(), key: "", value: "" },
+        ],
+      };
+    });
+  };
+
+  const handleEditingAttributeChange = (id, field, value) => {
+    setEditingMemberDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        customAttributes: prev.customAttributes.map((attr) =>
+          attr.id === id ? { ...attr, [field]: value } : attr
+        ),
+      };
+    });
+  };
+
+  const handleRemoveEditingAttribute = (id) => {
+    setEditingMemberDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        customAttributes: prev.customAttributes.filter((attr) => attr.id !== id),
+      };
+    });
+  };
+
+  const handleSaveEditingMember = () => {
+    if (!editingMemberDraft) {
+      return;
+    }
+    if (!editingMemberDraft.label.trim()) {
+      setEditingNameError("Name is required");
+      return;
+    }
+    const updatedMember = {
+      id: editingMemberId,
+      label: editingMemberDraft.label.trim(),
+      gender: editingMemberDraft.gender,
+      attributes: compileAttributes(
+        editingMemberDraft.lifeStatus,
+        editingMemberDraft.customAttributes,
+        editingMemberDraft.address
+      ),
+    };
+    setMembers((prev) =>
+      prev.map((member) => (member.id === editingMemberId ? updatedMember : member))
+    );
+    setAlertMessage("Member updated.");
+    setEditingMemberId(null);
+    setEditingMemberDraft(null);
+    setEditingNameError("");
+  };
+
   const handleAddMember = (event) => {
     event.preventDefault();
     if (!memberName.trim()) {
@@ -724,7 +896,11 @@ function App() {
       id: nextId,
       label: memberName.trim(),
       gender: memberGender,
-      attributes: compileAttributes(memberLifeStatus, memberAttributes),
+      attributes: compileAttributes(
+        memberLifeStatus,
+        memberAttributes,
+        memberAddress
+      ),
     };
     setMembers((prev) => [...prev, newMember]);
     resetMemberForm();
@@ -856,20 +1032,6 @@ function App() {
 
   const handleCloseAlert = () => setAlertMessage(null);
 
-  const handleEditMember = (member) => {
-    setEditorState({ open: true, member });
-  };
-
-  const handleSaveMember = (updated) => {
-    setMembers((prev) => prev.map((member) => (member.id === updated.id ? updated : member)));
-    setEditorState({ open: false, member: null });
-    setAlertMessage("Member updated.");
-  };
-
-  const handleCloseEditor = () => {
-    setEditorState({ open: false, member: null });
-  };
-
   const renderAttributes = (member) => {
     const chips = [];
     if (member.attributes?.lifeStatus) {
@@ -883,8 +1045,18 @@ function App() {
         />
       );
     }
+    if (member.attributes?.address) {
+      chips.push(
+        <Chip
+          key="address"
+          label={`Address: ${member.attributes.address}`}
+          size="small"
+          variant="outlined"
+        />
+      );
+    }
     Object.entries(member.attributes || {})
-      .filter(([key]) => key !== "lifeStatus")
+      .filter(([key]) => key !== "lifeStatus" && key !== "address")
       .forEach(([key, value]) => {
         chips.push(
           <Chip key={key} label={`${key}: ${value}`} size="small" variant="outlined" />
@@ -957,6 +1129,13 @@ function App() {
                             <MenuItem value="Deceased">Deceased</MenuItem>
                           </Select>
                         </FormControl>
+                        <TextField
+                          label="Address"
+                          value={memberAddress}
+                          onChange={(event) => setMemberAddress(event.target.value)}
+                          placeholder="e.g. 123 Main St, Springfield"
+                          fullWidth
+                        />
                         <Divider textAlign="left">Custom Attributes</Divider>
                         <Stack spacing={1.5}>
                           {memberAttributes.length === 0 && (
@@ -1127,13 +1306,30 @@ function App() {
                   </Tabs>
 
                   {tab === "graph" && (
-                    <Box sx={{ flexGrow: 1, minHeight: 480 }}>
+                    <Box
+                      sx={{
+                        flexGrow: 1,
+                        minHeight: 480,
+                        display: "flex",
+                        flexDirection: { xs: "column", md: "row" },
+                        gap: 3,
+                      }}
+                    >
                       <Paper
                         variant="outlined"
-                        sx={{ height: "100%", borderRadius: 3, overflow: "hidden" }}
+                        sx={{
+                          flex: 1,
+                          height: "100%",
+                          borderRadius: 3,
+                          overflow: "hidden",
+                        }}
                       >
                         <div ref={containerRef} className="network-surface" />
                       </Paper>
+                      <MemberDetailPanel
+                        member={selectedMember}
+                        onClose={() => setSelectedMemberId(null)}
+                      />
                     </Box>
                   )}
 
@@ -1165,10 +1361,18 @@ function App() {
                               member.gender,
                               isDeceased
                             );
+                            const isEditing = editingMemberId === member.id;
+                            const draft = isEditing && editingMemberDraft ? editingMemberDraft : null;
+                            const draftAttributes = draft ? draft.customAttributes : [];
+                            const secondaryLine =
+                              member.attributes?.address ||
+                              member.attributes?.occupation ||
+                              member.attributes?.hometown ||
+                              "";
                             return (
-                              <TableRow key={member.id} hover>
-                                <TableCell>
-                                  <Stack direction="row" spacing={2} alignItems="center">
+                              <TableRow key={member.id} hover selected={isEditing}>
+                                <TableCell sx={{ minWidth: 220 }}>
+                                  <Stack direction="row" spacing={2} alignItems="flex-start">
                                     <Avatar
                                       src={avatar}
                                       alt={member.label}
@@ -1181,32 +1385,186 @@ function App() {
                                         filter: isDeceased ? "grayscale(0.65)" : "none",
                                       }}
                                     />
-                                    <Box>
-                                      <Typography fontWeight={600}>{member.label}</Typography>
-                                      <Typography variant="body2" color="text.secondary">
-                                        {member.attributes?.occupation || member.attributes?.hometown || ""}
-                                      </Typography>
+                                    <Box sx={{ flex: 1 }}>
+                                      {isEditing ? (
+                                        <TextField
+                                          label="Name"
+                                          value={draft?.label ?? member.label}
+                                          onChange={(event) =>
+                                            handleEditingDraftChange("label", event.target.value)
+                                          }
+                                          size="small"
+                                          fullWidth
+                                          error={Boolean(editingNameError)}
+                                          helperText={editingNameError || ""}
+                                        />
+                                      ) : (
+                                        <>
+                                          <Typography fontWeight={600}>{member.label}</Typography>
+                                          {secondaryLine && (
+                                            <Typography variant="body2" color="text.secondary">
+                                              {secondaryLine}
+                                            </Typography>
+                                          )}
+                                        </>
+                                      )}
                                     </Box>
                                   </Stack>
                                 </TableCell>
-                                <TableCell>
-                                  <Chip
-                                    label={member.gender === "male" ? "Male" : "Female"}
-                                    color={member.gender === "male" ? "primary" : "secondary"}
-                                    size="small"
-                                  />
+                                <TableCell sx={{ minWidth: 160 }}>
+                                  {isEditing ? (
+                                    <FormControl fullWidth size="small">
+                                      <InputLabel id={`gender-${member.id}`}>Gender</InputLabel>
+                                      <Select
+                                        labelId={`gender-${member.id}`}
+                                        label="Gender"
+                                        value={
+                                          draft?.gender ?? member.gender ?? "female"
+                                        }
+                                        onChange={(event) =>
+                                          handleEditingDraftChange("gender", event.target.value)
+                                        }
+                                      >
+                                        <MenuItem value="female">Female</MenuItem>
+                                        <MenuItem value="male">Male</MenuItem>
+                                      </Select>
+                                    </FormControl>
+                                  ) : (
+                                    <Chip
+                                      label={member.gender === "male" ? "Male" : "Female"}
+                                      color={member.gender === "male" ? "primary" : "secondary"}
+                                      size="small"
+                                    />
+                                  )}
                                 </TableCell>
-                                <TableCell>
-                                  <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                                    {renderAttributes(member)}
-                                  </Stack>
+                                <TableCell sx={{ minWidth: 320 }}>
+                                  {isEditing ? (
+                                    <Stack spacing={1.5}>
+                                      <FormControl fullWidth size="small">
+                                        <InputLabel id={`life-${member.id}`}>Life Status</InputLabel>
+                                        <Select
+                                          labelId={`life-${member.id}`}
+                                          label="Life Status"
+                                          value={
+                                            draft?.lifeStatus ??
+                                              member.attributes?.lifeStatus ??
+                                              "Alive"
+                                          }
+                                          onChange={(event) =>
+                                            handleEditingDraftChange("lifeStatus", event.target.value)
+                                          }
+                                        >
+                                          <MenuItem value="Alive">Alive</MenuItem>
+                                          <MenuItem value="Deceased">Deceased</MenuItem>
+                                        </Select>
+                                      </FormControl>
+                                      <TextField
+                                        label="Address"
+                                        value={
+                                          draft?.address ??
+                                            member.attributes?.address ??
+                                            ""
+                                        }
+                                        onChange={(event) =>
+                                          handleEditingDraftChange("address", event.target.value)
+                                        }
+                                        size="small"
+                                        fullWidth
+                                      />
+                                      <Divider textAlign="left" sx={{ fontSize: 12 }}>
+                                        Custom Attributes
+                                      </Divider>
+                                      <Stack spacing={1.25}>
+                                        {draftAttributes.length === 0 && (
+                                          <Typography variant="body2" color="text.secondary">
+                                            Add descriptors like hometown or occupation.
+                                          </Typography>
+                                        )}
+                                        {draftAttributes.map((attr) => (
+                                          <Stack
+                                            key={attr.id}
+                                            direction="row"
+                                            spacing={1}
+                                            alignItems="center"
+                                          >
+                                            <TextField
+                                              label="Key"
+                                              value={attr.key}
+                                              onChange={(event) =>
+                                                handleEditingAttributeChange(
+                                                  attr.id,
+                                                  "key",
+                                                  event.target.value
+                                                )
+                                              }
+                                              size="small"
+                                              sx={{ flex: 1 }}
+                                            />
+                                            <TextField
+                                              label="Value"
+                                              value={attr.value}
+                                              onChange={(event) =>
+                                                handleEditingAttributeChange(
+                                                  attr.id,
+                                                  "value",
+                                                  event.target.value
+                                                )
+                                              }
+                                              size="small"
+                                              sx={{ flex: 1 }}
+                                            />
+                                            <Tooltip title="Remove attribute">
+                                              <IconButton
+                                                onClick={() => handleRemoveEditingAttribute(attr.id)}
+                                                size="small"
+                                              >
+                                                <DeleteIcon fontSize="inherit" />
+                                              </IconButton>
+                                            </Tooltip>
+                                          </Stack>
+                                        ))}
+                                      </Stack>
+                                      <Button
+                                        variant="text"
+                                        onClick={handleAddEditingAttribute}
+                                        startIcon={<AddIcon fontSize="small" />}
+                                        size="small"
+                                        sx={{ alignSelf: "flex-start" }}
+                                      >
+                                        Add attribute
+                                      </Button>
+                                    </Stack>
+                                  ) : (
+                                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                                      {renderAttributes(member)}
+                                    </Stack>
+                                  )}
                                 </TableCell>
                                 <TableCell align="right">
-                                  <Tooltip title="Edit member">
-                                    <IconButton onClick={() => handleEditMember(member)}>
-                                      <EditIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
+                                  {isEditing ? (
+                                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                      <Tooltip title="Cancel">
+                                        <IconButton onClick={handleCancelEditingMember} size="small">
+                                          <CloseIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                      <Tooltip title="Save changes">
+                                        <IconButton
+                                          onClick={handleSaveEditingMember}
+                                          color="primary"
+                                          size="small"
+                                        >
+                                          <CheckIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </Stack>
+                                  ) : (
+                                    <Tooltip title="Edit member">
+                                      <IconButton onClick={() => handleStartEditingMember(member)}>
+                                        <EditIcon fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             );
@@ -1276,13 +1634,6 @@ function App() {
             </Grid>
           </Grid>
         </Container>
-
-        <MemberEditorDialog
-          open={editorState.open}
-          member={editorState.member}
-          onClose={handleCloseEditor}
-          onSave={handleSaveMember}
-        />
 
         {alertMessage && (
           <Alert
