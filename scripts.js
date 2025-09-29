@@ -81,6 +81,19 @@ const defaultData = {
 
 const avatarCache = new Map();
 
+const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="family-tree-logo" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60a5fa" />
+      <stop offset="100%" stop-color="#4f46e5" />
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="url(#family-tree-logo)" />
+  <path d="M32 16c-6.627 0-12 5.373-12 12 0 5.029 3.157 9.312 7.573 10.961L24 48h16l-3.573-9.039C40.843 37.312 44 33.029 44 28c0-6.627-5.373-12-12-12z" fill="#f8fafc" stroke="#e0e7ff" stroke-width="2" stroke-linejoin="round" />
+  <circle cx="32" cy="24" r="4" fill="#4f46e5" opacity="0.75" />
+</svg>`;
+const logoDataUri = `data:image/svg+xml;utf8,${encodeURIComponent(logoSvg)}`;
+
 function loadFromStorage() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -530,6 +543,7 @@ const {
   Select,
   Tabs,
   Tab,
+  Autocomplete,
   Divider,
   Table,
   TableHead,
@@ -581,6 +595,8 @@ const DeleteIcon = iconsSource.Delete || fallbackIconFactory("🗑️");
 const AddIcon = iconsSource.Add || fallbackIconFactory("＋");
 const CloseIcon = iconsSource.Close || fallbackIconFactory("✖️");
 const CheckIcon = iconsSource.Check || fallbackIconFactory("✔️");
+const ExpandIcon = iconsSource.Fullscreen || fallbackIconFactory("⛶");
+const CollapseIcon = iconsSource.FullscreenExit || fallbackIconFactory("🗗");
 
 function useNetwork(members, relationships, { onSelectMember } = {}) {
   const containerRef = React.useRef(null);
@@ -771,6 +787,7 @@ function App() {
     initialData.relationships
   );
   const [tab, setTab] = React.useState("graph");
+  const [graphExpanded, setGraphExpanded] = React.useState(false);
 
   const [memberName, setMemberName] = React.useState("");
   const [memberGender, setMemberGender] = React.useState("female");
@@ -799,13 +816,32 @@ function App() {
   );
 
   React.useEffect(() => {
-    if (tab === "graph") {
-      window.requestAnimationFrame(() => {
-        redrawNetwork();
-        fitNetwork();
-      });
+    if (tab !== "graph") {
+      return undefined;
     }
+    const timer = window.setTimeout(() => {
+      redrawNetwork();
+      fitNetwork({ animation: false });
+    }, 150);
+    return () => window.clearTimeout(timer);
   }, [tab, fitNetwork, redrawNetwork]);
+
+  React.useEffect(() => {
+    if (tab !== "graph" && graphExpanded) {
+      setGraphExpanded(false);
+    }
+  }, [tab, graphExpanded]);
+
+  React.useEffect(() => {
+    if (!graphExpanded || tab !== "graph") {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      redrawNetwork();
+      fitNetwork({ animation: false });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [graphExpanded, tab, fitNetwork, redrawNetwork]);
 
   React.useEffect(() => {
     if (selectedMemberId && !members.some((member) => member.id === selectedMemberId)) {
@@ -853,6 +889,31 @@ function App() {
         label: member.label,
       })),
     [sortedMembers]
+  );
+
+  const relationshipSecondLabel = React.useMemo(
+    () =>
+      relationshipType === "spouse"
+        ? "Second Spouse"
+        : relationshipType === "divorced"
+        ? "Former Partner"
+        : "Child",
+    [relationshipType]
+  );
+
+  const firstPersonValue = React.useMemo(
+    () =>
+      relationshipOptions.find(
+        (option) => option.id === Number(relationshipFrom)
+      ) || null,
+    [relationshipOptions, relationshipFrom]
+  );
+
+  const secondPersonValue = React.useMemo(
+    () =>
+      relationshipOptions.find((option) => option.id === Number(relationshipTo)) ||
+      null,
+    [relationshipOptions, relationshipTo]
   );
 
   const resetMemberForm = () => {
@@ -1180,29 +1241,41 @@ function App() {
           <Toolbar
             sx={{
               flexWrap: "wrap",
-              gap: { xs: 1.5, md: 2 },
-              alignItems: { xs: "flex-start", md: "center" },
+              gap: { xs: 1.75, md: 2.5 },
+              alignItems: { xs: "stretch", md: "center" },
+              justifyContent: { xs: "center", md: "flex-start" },
               py: { xs: 1.5, md: 1.5 },
             }}
           >
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                flexGrow: 1,
-                minWidth: 0,
-              }}
+            <Stack
+              direction="row"
+              spacing={1.75}
+              alignItems="center"
+              sx={{ flexShrink: 0, pr: { xs: 0, md: 1.5 } }}
             >
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                Family Tree Studio
-              </Typography>
-              <Typography
-                variant="body2"
-                sx={{ opacity: 0.8, display: { xs: "none", sm: "block" } }}
-              >
-                Visualize and enrich your family story
-              </Typography>
-            </Box>
+              <Avatar
+                src={logoDataUri}
+                alt="Family Tree Studio logo"
+                sx={{
+                  width: 44,
+                  height: 44,
+                  boxShadow: "0 12px 22px rgba(15, 23, 42, 0.25)",
+                  border: "2px solid rgba(255, 255, 255, 0.3)",
+                  bgcolor: "#fff",
+                }}
+              />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.15 }}>
+                  Family Tree Studio
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{ opacity: 0.82, display: { xs: "none", sm: "block" } }}
+                >
+                  Visualize and enrich your family story
+                </Typography>
+              </Box>
+            </Stack>
             <Tabs
               value={tab}
               onChange={(event, value) => setTab(value)}
@@ -1211,11 +1284,16 @@ function App() {
               textColor="inherit"
               indicatorColor="secondary"
               sx={{
-                ml: { xs: 0, md: 2 },
-                flexShrink: 0,
                 borderRadius: 9999,
-                bgcolor: "rgba(255, 255, 255, 0.12)",
-                px: { xs: 1, sm: 2 },
+                bgcolor: "rgba(255, 255, 255, 0.14)",
+                px: { xs: 0.5, sm: 1.5 },
+                flexGrow: 1,
+                maxWidth: { xs: "100%", md: "unset" },
+                ml: { xs: 0, md: 3 },
+                '& .MuiTabs-flexContainer': {
+                  justifyContent: { xs: "space-between", sm: "flex-start" },
+                  gap: { xs: 1, sm: 0 },
+                },
                 '& .MuiTab-root': {
                   minHeight: 0,
                   py: 1,
@@ -1233,12 +1311,17 @@ function App() {
 
         <Container
           component="main"
-          maxWidth="xl"
-          sx={{ py: { xs: 3, md: 4 }, flexGrow: 1 }}
+          maxWidth={false}
+          sx={{
+            py: { xs: 3, md: 4 },
+            px: { xs: 2, sm: 3, md: 4, lg: 6 },
+            flexGrow: 1,
+          }}
         >
-          <Grid container spacing={4}>
-            <Grid item xs={12} md={4} lg={3}>
-              <Stack spacing={3}>
+          <Grid container spacing={4} alignItems="stretch">
+            {!graphExpanded && (
+              <Grid item xs={12} md={4} lg={3}>
+                <Stack spacing={3}>
                 <Card elevation={2}>
                   <CardContent>
                     <Typography variant="h6" gutterBottom>
@@ -1374,54 +1457,48 @@ function App() {
                             <MenuItem value="divorced">Divorced</MenuItem>
                           </Select>
                         </FormControl>
-                        <FormControl fullWidth>
-                          <InputLabel id="relationship-from-label">First Person</InputLabel>
-                          <Select
-                            labelId="relationship-from-label"
-                            label="First Person"
-                            value={relationshipFrom}
-                            onChange={(event) => setRelationshipFrom(event.target.value)}
-                          >
-                            <MenuItem value="">
-                              <em>Select</em>
-                            </MenuItem>
-                            {relationshipOptions.map((option) => (
-                              <MenuItem key={option.id} value={option.id}>
-                                {option.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        <FormControl fullWidth>
-                          <InputLabel id="relationship-to-label">
-                            {relationshipType === "spouse"
-                              ? "Second Spouse"
-                              : relationshipType === "divorced"
-                              ? "Former Partner"
-                              : "Child"}
-                          </InputLabel>
-                          <Select
-                            labelId="relationship-to-label"
-                            label={
-                              relationshipType === "spouse"
-                                ? "Second Spouse"
-                                : relationshipType === "divorced"
-                                ? "Former Partner"
-                                : "Child"
-                            }
-                            value={relationshipTo}
-                            onChange={(event) => setRelationshipTo(event.target.value)}
-                          >
-                            <MenuItem value="">
-                              <em>Select</em>
-                            </MenuItem>
-                            {relationshipOptions.map((option) => (
-                              <MenuItem key={option.id} value={option.id}>
-                                {option.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
+                        <Autocomplete
+                          options={relationshipOptions}
+                          value={firstPersonValue}
+                          onChange={(event, newValue) =>
+                            setRelationshipFrom(newValue ? newValue.id : "")
+                          }
+                          isOptionEqualToValue={(option, value) => option.id === value.id}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label="First Person"
+                              placeholder="Search family member"
+                            />
+                          )}
+                          noOptionsText="No matching member"
+                          fullWidth
+                          size="small"
+                          clearOnBlur
+                          autoHighlight
+                          disablePortal
+                        />
+                        <Autocomplete
+                          options={relationshipOptions}
+                          value={secondPersonValue}
+                          onChange={(event, newValue) =>
+                            setRelationshipTo(newValue ? newValue.id : "")
+                          }
+                          isOptionEqualToValue={(option, value) => option.id === value.id}
+                          renderInput={(params) => (
+                            <TextField
+                              {...params}
+                              label={relationshipSecondLabel}
+                              placeholder="Search family member"
+                            />
+                          )}
+                          noOptionsText="No matching member"
+                          fullWidth
+                          size="small"
+                          clearOnBlur
+                          autoHighlight
+                          disablePortal
+                        />
                         <Button type="submit" variant="contained">
                           Add Relationship
                         </Button>
@@ -1449,37 +1526,83 @@ function App() {
                     </ButtonGroup>
                   </CardContent>
                 </Card>
-              </Stack>
-            </Grid>
+                </Stack>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={8} lg={9}>
+            <Grid
+              item
+              xs={12}
+              md={graphExpanded ? 12 : 8}
+              lg={graphExpanded ? 12 : 9}
+            >
               <Card elevation={2} sx={{ height: "100%" }}>
                 <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
-                      {tab === "graph"
-                        ? "Family Graph"
-                        : tab === "members"
-                        ? "Members Directory"
-                        : "Relationship Ledger"}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {tab === "graph"
-                        ? "Explore the family network and tap on people to view their story."
-                        : tab === "members"
-                        ? "Manage profiles, addresses, custom attributes, and portrait photos."
-                        : "Review how everyone is connected across the family tree."}
-                    </Typography>
-                  </Box>
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    alignItems={{ xs: "flex-start", sm: "center" }}
+                    justifyContent="space-between"
+                    spacing={1.5}
+                    sx={{ mb: 2 }}
+                  >
+                    <Box>
+                      <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
+                        {tab === "graph"
+                          ? "Family Graph"
+                          : tab === "members"
+                          ? "Members Directory"
+                          : "Relationship Ledger"}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {tab === "graph"
+                          ? "Explore the family network and tap on people to view their story."
+                          : tab === "members"
+                          ? "Manage profiles, addresses, custom attributes, and portrait photos."
+                          : "Review how everyone is connected across the family tree."}
+                      </Typography>
+                    </Box>
+                    {tab === "graph" && (
+                      <Button
+                        variant={graphExpanded ? "contained" : "outlined"}
+                        color="secondary"
+                        startIcon={
+                          graphExpanded ? (
+                            <CollapseIcon fontSize="small" />
+                          ) : (
+                            <ExpandIcon fontSize="small" />
+                          )
+                        }
+                        onClick={() =>
+                          setGraphExpanded((prev) => {
+                            const next = !prev;
+                            if (!next) {
+                              window.setTimeout(() => {
+                                redrawNetwork();
+                                fitNetwork({ animation: false });
+                              }, 80);
+                            }
+                            return next;
+                          })
+                        }
+                        sx={{
+                          alignSelf: { xs: "stretch", sm: "flex-start" },
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {graphExpanded ? "Collapse graph" : "Expand graph"}
+                      </Button>
+                    )}
+                  </Stack>
 
                   {tab === "graph" && (
                     <Box
                       sx={{
                         flexGrow: 1,
-                        minHeight: 480,
+                        minHeight: { xs: 420, md: 540 },
                         display: "flex",
                         flexDirection: { xs: "column", md: "row" },
                         gap: 3,
+                        alignItems: { xs: "stretch", md: "stretch" },
                       }}
                     >
                       <Paper
@@ -1489,14 +1612,41 @@ function App() {
                           height: "100%",
                           borderRadius: 3,
                           overflow: "hidden",
+                          position: "relative",
+                          display: "flex",
+                          flexDirection: "column",
                         }}
                       >
                         <div ref={containerRef} className="network-surface" />
+                        {!selectedMember && (
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              bottom: { xs: 16, md: 20 },
+                              left: { xs: 16, md: 24 },
+                              right: { xs: 16, md: "auto" },
+                              maxWidth: { xs: "100%", md: 320 },
+                              bgcolor: "rgba(15, 23, 42, 0.82)",
+                              color: "#f8fafc",
+                              px: 2,
+                              py: 1.25,
+                              borderRadius: 2,
+                              fontSize: 13,
+                              letterSpacing: 0.1,
+                              boxShadow: 6,
+                              pointerEvents: "none",
+                            }}
+                          >
+                            Tip: tap or click a family member to open their story panel.
+                          </Box>
+                        )}
                       </Paper>
-                      <MemberDetailPanel
-                        member={selectedMember}
-                        onClose={() => setSelectedMemberId(null)}
-                      />
+                      {selectedMember && (
+                        <MemberDetailPanel
+                          member={selectedMember}
+                          onClose={() => setSelectedMemberId(null)}
+                        />
+                      )}
                     </Box>
                   )}
 
