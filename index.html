@@ -8,74 +8,129 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Family Tree Builder</h1>
-    <p>Visualize family relationships, including multiple spouses, parents, and children.</p>
+  <header class="top-bar">
+    <div class="brand">
+      <div class="brand-mark">FT</div>
+      <div class="brand-copy">
+        <h1>Family Tree Studio</h1>
+        <p>Design a beautiful, data-rich view of the people you love.</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="primary">Export</button>
+      <button class="ghost">Help</button>
+    </div>
   </header>
 
-  <main>
-    <section class="controls">
-      <div class="card">
+  <main class="dashboard">
+    <aside class="sidebar">
+      <section class="card">
         <h2>Add Family Member</h2>
-        <form id="add-member-form">
-          <label>
-            Name
-            <input type="text" id="member-name" required />
+        <form id="add-member-form" class="stack">
+          <label class="field">
+            <span>Name</span>
+            <input type="text" id="member-name" placeholder="e.g. Jane Doe" required />
           </label>
-          <label>
-            Gender
+          <label class="field">
+            <span>Gender</span>
             <select id="member-gender" required>
               <option value="female">Female</option>
               <option value="male">Male</option>
-              <option value="nonbinary">Non-binary</option>
-              <option value="unknown">Prefer not to say</option>
             </select>
           </label>
-          <button type="submit">Add Member</button>
+          <button type="submit" class="primary">Add Member</button>
         </form>
-      </div>
+      </section>
 
-      <div class="card">
+      <section class="card">
         <h2>Add Relationship</h2>
-        <form id="add-relationship-form">
-          <label>
-            Relationship Type
+        <form id="add-relationship-form" class="stack">
+          <label class="field">
+            <span>Relationship Type</span>
             <select id="relationship-type" required>
               <option value="parent">Parent → Child</option>
               <option value="spouse">Spouses</option>
             </select>
           </label>
-
-          <label>
+          <label class="field">
             <span class="label-text">First Person</span>
             <select id="relationship-from" required></select>
           </label>
-
-          <label id="relationship-to-wrapper">
+          <label class="field" id="relationship-to-wrapper">
             <span class="label-text">Second Person</span>
             <select id="relationship-to" required></select>
           </label>
-
-          <button type="submit">Add Relationship</button>
+          <button type="submit" class="primary">Add Relationship</button>
         </form>
-      </div>
+      </section>
 
-      <div class="card">
+      <section class="card">
         <h2>Storage</h2>
         <div class="storage-actions">
-          <button id="save-data">Save to LocalStorage</button>
-          <button id="load-data">Reload Saved Data</button>
-          <button id="reset-data" class="danger">Reset to Sample Data</button>
+          <button id="save-data" class="ghost">Save to LocalStorage</button>
+          <button id="load-data" class="ghost">Reload Saved Data</button>
+          <button id="reset-data" class="danger ghost">Reset to Sample Data</button>
         </div>
         <p class="storage-hint">
           Data persists in this browser using <code>localStorage</code>. Clearing your browser data
           removes it.
         </p>
-      </div>
-    </section>
+      </section>
+    </aside>
 
-    <section class="graph-container">
-      <div id="network"></div>
+    <section class="workspace">
+      <nav class="view-tabs" aria-label="Primary views">
+        <button type="button" class="active" data-target="graph">Graph</button>
+        <button type="button" data-target="members">Members</button>
+        <button type="button" data-target="relationships">Relationships</button>
+      </nav>
+
+      <div class="view-panel active" data-view="graph">
+        <div class="panel-header">
+          <h2>Family Graph</h2>
+          <p>Interactive network showing spouses, parents, and children.</p>
+        </div>
+        <div class="graph-container">
+          <div id="network"></div>
+        </div>
+      </div>
+
+      <div class="view-panel" data-view="members">
+        <div class="panel-header">
+          <h2>Members</h2>
+          <p>Directory of everyone in your family tree.</p>
+        </div>
+        <div class="table-wrapper">
+          <table id="members-table">
+            <thead>
+              <tr>
+                <th scope="col">Person</th>
+                <th scope="col">Gender</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="view-panel" data-view="relationships">
+        <div class="panel-header">
+          <h2>Relationships</h2>
+          <p>Explore how each person connects to others.</p>
+        </div>
+        <div class="table-wrapper">
+          <table id="relationships-table">
+            <thead>
+              <tr>
+                <th scope="col">Type</th>
+                <th scope="col">From</th>
+                <th scope="col">To</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
     </section>
   </main>
 
