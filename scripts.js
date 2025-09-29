@@ -44,7 +44,7 @@ const defaultData = {
     },
   ],
   relationships: [
-    { id: "1-2", from: 1, to: 2, type: "spouse" },
+    { id: "1~2", from: 1, to: 2, type: "divorced" },
     { id: "1-3", from: 1, to: 3, type: "spouse" },
     { id: "1>4", from: 1, to: 4, type: "parent" },
     { id: "2>4", from: 2, to: 4, type: "parent" },
@@ -134,11 +134,17 @@ function normalizeMember(member) {
 }
 
 function normalizeRelationship(relationship) {
+  const normalizedType =
+    relationship.type === "spouse"
+      ? "spouse"
+      : relationship.type === "divorced"
+      ? "divorced"
+      : "parent";
   return {
     id: relationship.id,
     from: relationship.from,
     to: relationship.to,
-    type: relationship.type === "spouse" ? "spouse" : "parent",
+    type: normalizedType,
   };
 }
 
@@ -232,17 +238,24 @@ function prepareNode(member) {
 
 function formatEdge(edge) {
   const isSpouse = edge.type === "spouse";
+  const isDivorced = edge.type === "divorced";
   const colors = isSpouse
     ? { color: "#ef4444", highlight: "#b91c1c" }
+    : isDivorced
+    ? { color: "#9ca3af", highlight: "#4b5563" }
     : { color: "#10b981", highlight: "#047857" };
-
+  const label = isSpouse ? "spouse" : isDivorced ? "divorced" : "parent";
   return {
     ...edge,
-    label: isSpouse ? "spouse" : "parent",
+    label,
     color: { color: colors.color, highlight: colors.highlight },
-    arrows: isSpouse ? undefined : "to",
-    dashes: isSpouse,
-    smooth: { enabled: isSpouse, type: "curvedCW", roundness: 0.3 },
+    arrows: isSpouse || isDivorced ? undefined : "to",
+    dashes: isSpouse ? true : isDivorced ? [6, 6] : false,
+    smooth: {
+      enabled: isSpouse || isDivorced,
+      type: isDivorced ? "curvedCCW" : "curvedCW",
+      roundness: 0.3,
+    },
     font: {
       size: 13,
       color: "#4b5563",
@@ -318,7 +331,41 @@ const {
   Alert,
 } = MaterialUI;
 
-const { Edit, Delete, Add, Close } = MaterialUIIcons;
+const iconsSource =
+  window.MaterialUIIcons ||
+  window.MaterialUI?.IconsMaterial ||
+  window.MaterialUI?.Icons ||
+  {};
+
+const fallbackIconFactory = (symbol) => (props = {}) => {
+  const { sx, style, ...rest } = props;
+  const host = MaterialUI?.Icon;
+  if (host) {
+    return React.createElement(host, { ...rest, sx }, symbol);
+  }
+  return React.createElement(
+    "span",
+    {
+      ...rest,
+      style: {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 24,
+        height: 24,
+        fontSize: "1.25rem",
+        lineHeight: 1,
+        ...(style || {}),
+      },
+    },
+    symbol
+  );
+};
+
+const EditIcon = iconsSource.Edit || fallbackIconFactory("✏️");
+const DeleteIcon = iconsSource.Delete || fallbackIconFactory("🗑️");
+const AddIcon = iconsSource.Add || fallbackIconFactory("＋");
+const CloseIcon = iconsSource.Close || fallbackIconFactory("✖️");
 
 function useNetwork(members, relationships) {
   const containerRef = React.useRef(null);
@@ -535,7 +582,7 @@ function MemberEditorDialog({ open, member, onClose, onSave }) {
               </Typography>
               <Button
                 size="small"
-                startIcon={<Add fontSize="small" />}
+                startIcon={<AddIcon fontSize="small" />}
                 onClick={handleAddAttribute}
               >
                 Add Attribute
@@ -569,7 +616,7 @@ function MemberEditorDialog({ open, member, onClose, onSave }) {
                   />
                   <Tooltip title="Remove attribute">
                     <IconButton onClick={() => handleRemoveAttribute(attr.id)}>
-                      <Delete fontSize="small" />
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 </Stack>
@@ -579,7 +626,7 @@ function MemberEditorDialog({ open, member, onClose, onSave }) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} startIcon={<Close fontSize="small" />}>Cancel</Button>
+        <Button onClick={onClose} startIcon={<CloseIcon fontSize="small" />}>Cancel</Button>
         <Button variant="contained" onClick={handleSave}>
           Save Changes
         </Button>
@@ -689,7 +736,7 @@ function App() {
       if (relationship.type !== type) {
         return false;
       }
-      if (type === "spouse") {
+      if (type === "spouse" || type === "divorced") {
         return (
           (relationship.from === from && relationship.to === to) ||
           (relationship.from === to && relationship.to === from)
@@ -698,6 +745,13 @@ function App() {
       return relationship.from === from && relationship.to === to;
     });
   };
+
+  const hasPartnerHistory = (memberId) =>
+    relationships.some(
+      (relationship) =>
+        (relationship.type === "spouse" || relationship.type === "divorced") &&
+        (relationship.from === memberId || relationship.to === memberId)
+    );
 
   const handleAddRelationship = (event) => {
     event.preventDefault();
@@ -714,9 +768,31 @@ function App() {
       return;
     }
 
+    if (relationshipType === "divorced") {
+      const hadMarriage = relationships.some(
+        (relationship) =>
+          relationship.type === "spouse" &&
+          ((relationship.from === from && relationship.to === to) ||
+            (relationship.from === to && relationship.to === from))
+      );
+      if (!hadMarriage) {
+        setAlertMessage("Record a spouse relationship before marking a divorce.");
+        return;
+      }
+    }
+
+    if (relationshipType === "parent" && !hasPartnerHistory(from)) {
+      setAlertMessage(
+        "Parents must have a recorded spouse or divorce before adding children."
+      );
+      return;
+    }
+
     const idSuffix =
       relationshipType === "spouse"
         ? `${Math.min(from, to)}-${Math.max(from, to)}`
+        : relationshipType === "divorced"
+        ? `${Math.min(from, to)}~${Math.max(from, to)}`
         : `${from}>${to}`;
 
     const newRelationship = {
@@ -725,10 +801,29 @@ function App() {
       to,
       type: relationshipType,
     };
-    setRelationships((prev) => [...prev, newRelationship]);
+    setRelationships((prev) => {
+      if (relationshipType === "divorced") {
+        const filtered = prev.filter(
+          (relationship) =>
+            !(
+              relationship.type === "spouse" &&
+              ((relationship.from === from && relationship.to === to) ||
+                (relationship.from === to && relationship.to === from))
+            )
+        );
+        return [...filtered, newRelationship];
+      }
+      return [...prev, newRelationship];
+    });
     setRelationshipFrom("");
     setRelationshipTo("");
-    setAlertMessage("Relationship added.");
+    setAlertMessage(
+      relationshipType === "spouse"
+        ? "Spouse relationship added."
+        : relationshipType === "divorced"
+        ? "Divorce recorded."
+        : "Parent relationship added."
+    );
   };
 
   const handleSaveSnapshot = () => {
@@ -894,7 +989,7 @@ function App() {
                                   onClick={() => handleRemoveMemberAttribute(attr.id)}
                                   size="small"
                                 >
-                                  <Delete fontSize="inherit" />
+                                  <DeleteIcon fontSize="inherit" />
                                 </IconButton>
                               </Tooltip>
                             </Stack>
@@ -903,7 +998,7 @@ function App() {
                         <Button
                           variant="text"
                           onClick={handleAddAttribute}
-                          startIcon={<Add />}
+                          startIcon={<AddIcon />}
                           sx={{ alignSelf: "flex-start" }}
                         >
                           Add attribute
@@ -935,6 +1030,7 @@ function App() {
                           >
                             <MenuItem value="parent">Parent → Child</MenuItem>
                             <MenuItem value="spouse">Spouses</MenuItem>
+                            <MenuItem value="divorced">Divorced</MenuItem>
                           </Select>
                         </FormControl>
                         <FormControl fullWidth>
@@ -957,13 +1053,19 @@ function App() {
                         </FormControl>
                         <FormControl fullWidth>
                           <InputLabel id="relationship-to-label">
-                            {relationshipType === "spouse" ? "Second Spouse" : "Child"}
+                            {relationshipType === "spouse"
+                              ? "Second Spouse"
+                              : relationshipType === "divorced"
+                              ? "Former Partner"
+                              : "Child"}
                           </InputLabel>
                           <Select
                             labelId="relationship-to-label"
                             label={
                               relationshipType === "spouse"
                                 ? "Second Spouse"
+                                : relationshipType === "divorced"
+                                ? "Former Partner"
                                 : "Child"
                             }
                             value={relationshipTo}
@@ -1102,7 +1204,7 @@ function App() {
                                 <TableCell align="right">
                                   <Tooltip title="Edit member">
                                     <IconButton onClick={() => handleEditMember(member)}>
-                                      <Edit fontSize="small" />
+                                      <EditIcon fontSize="small" />
                                     </IconButton>
                                   </Tooltip>
                                 </TableCell>
@@ -1154,7 +1256,11 @@ function App() {
                               return (
                                 <TableRow key={relationship.id}>
                                   <TableCell>
-                                    {relationship.type === "spouse" ? "Spouses" : "Parent → Child"}
+                                    {relationship.type === "spouse"
+                                      ? "Spouses"
+                                      : relationship.type === "divorced"
+                                      ? "Divorced"
+                                      : "Parent → Child"}
                                   </TableCell>
                                   <TableCell>{fromMember?.label || "Unknown"}</TableCell>
                                   <TableCell>{toMember?.label || "Unknown"}</TableCell>
@@ -1187,7 +1293,7 @@ function App() {
                 size="small"
                 onClick={handleCloseAlert}
               >
-                <Close fontSize="inherit" />
+                <CloseIcon fontSize="inherit" />
               </IconButton>
             }
             sx={{
