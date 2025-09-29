@@ -306,12 +306,16 @@
     const isSpouse = edge.type === "spouse";
     const isDivorced = edge.type === "divorced";
     const color = isSpouse ? "#ef4444" : isDivorced ? "#9ca3af" : "#10b981";
-    const highlight = isSpouse ? "#b91c1c" : isDivorced ? "#4b5563" : "#047857";
+    const highlight = isSpouse ? "#b91c1c" : isDivorced ? "#4b5563" : "#0f766e";
     return {
       ...edge,
       color,
       highlight,
-      labelText: isSpouse ? "spouse" : isDivorced ? "divorced" : "",
+      labelText: isSpouse
+        ? "Spouse"
+        : isDivorced
+        ? "Divorced"
+        : "Parent → Child",
       dashArray: isSpouse ? "6,6" : isDivorced ? "4,8" : null,
       distance: isSpouse ? 200 : isDivorced ? 220 : 150,
       strength: isSpouse || isDivorced ? 0.5 : 0.9,

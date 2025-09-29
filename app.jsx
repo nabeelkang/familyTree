@@ -386,17 +386,37 @@ function useNetwork(
 
     defs
       .append("marker")
-      .attr("id", "arrow-parent")
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 10)
+      .attr("id", "dot-parent")
+      .attr("viewBox", "-6 -6 12 12")
+      .attr("refX", 0)
       .attr("refY", 0)
-      .attr("markerWidth", 10)
-      .attr("markerHeight", 10)
+      .attr("markerWidth", 9)
+      .attr("markerHeight", 9)
+      .attr("orient", "auto")
+      .attr("markerUnits", "strokeWidth")
+      .append("circle")
+      .attr("cx", 0)
+      .attr("cy", 0)
+      .attr("r", 3.2)
+      .attr("fill", "#0f766e")
+      .attr("stroke", "#ecfdf5")
+      .attr("stroke-width", 1.2);
+
+    defs
+      .append("marker")
+      .attr("id", "arrow-parent")
+      .attr("viewBox", "0 -7 14 14")
+      .attr("refX", 12)
+      .attr("refY", 0)
+      .attr("markerWidth", 13)
+      .attr("markerHeight", 13)
       .attr("orient", "auto")
       .attr("markerUnits", "strokeWidth")
       .append("path")
-      .attr("d", "M0,-5L10,0L0,5")
-      .attr("fill", "#10b981");
+      .attr("d", "M0,-7L14,0L0,7")
+      .attr("fill", "#059669")
+      .attr("stroke", "#ecfdf5")
+      .attr("stroke-width", 0.9);
 
     const zoomGroup = svg.append("g").attr("class", "network-zoom");
     const linkGroup = zoomGroup.append("g").attr("class", "network-links");
@@ -525,6 +545,9 @@ function useNetwork(
       .attr("stroke", (d) => d.color)
       .attr("stroke-dasharray", (d) => d.dashArray || null)
       .attr("opacity", (d) => (d.type === "divorced" ? 0.85 : 1))
+      .attr("marker-start", (d) =>
+        d.type === "parent" ? "url(#dot-parent)" : null
+      )
       .attr("marker-end", (d) =>
         d.type === "parent" ? "url(#arrow-parent)" : null
       );
