@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Family Tree</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/styles/vis-network.min.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Family Tree Builder</h1>
+    <p>Visualize family relationships, including multiple spouses, parents, and children.</p>
+  </header>
+
+  <main>
+    <section class="controls">
+      <div class="card">
+        <h2>Add Family Member</h2>
+        <form id="add-member-form">
+          <label>
+            Name
+            <input type="text" id="member-name" required />
+          </label>
+          <label>
+            Gender
+            <select id="member-gender" required>
+              <option value="female">Female</option>
+              <option value="male">Male</option>
+              <option value="nonbinary">Non-binary</option>
+              <option value="unknown">Prefer not to say</option>
+            </select>
+          </label>
+          <button type="submit">Add Member</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Add Relationship</h2>
+        <form id="add-relationship-form">
+          <label>
+            Relationship Type
+            <select id="relationship-type" required>
+              <option value="parent">Parent → Child</option>
+              <option value="spouse">Spouses</option>
+            </select>
+          </label>
+
+          <label>
+            <span class="label-text">First Person</span>
+            <select id="relationship-from" required></select>
+          </label>
+
+          <label id="relationship-to-wrapper">
+            <span class="label-text">Second Person</span>
+            <select id="relationship-to" required></select>
+          </label>
+
+          <button type="submit">Add Relationship</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Storage</h2>
+        <div class="storage-actions">
+          <button id="save-data">Save to LocalStorage</button>
+          <button id="load-data">Reload Saved Data</button>
+          <button id="reset-data" class="danger">Reset to Sample Data</button>
+        </div>
+        <p class="storage-hint">
+          Data persists in this browser using <code>localStorage</code>. Clearing your browser data
+          removes it.
+        </p>
+      </div>
+    </section>
+
+    <section class="graph-container">
+      <div id="network"></div>
+    </section>
+  </main>
+
+  <template id="option-template">
+    <option></option>
+  </template>
+
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+  <script src="scripts.js"></script>
+</body>
+</html>
