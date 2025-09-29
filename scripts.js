@@ -272,60 +272,48 @@ function escapeHtml(value) {
   });
 }
 
+function getNodePalette(gender, isDeceased) {
+  if (isDeceased) {
+    return { border: "#9ca3af", background: "#f3f4f6", accent: "#4b5563" };
+  }
+  return gender === "female"
+    ? { border: "#f472b6", background: "#fdf2f8", accent: "#db2777" }
+    : { border: "#60a5fa", background: "#dbeafe", accent: "#1d4ed8" };
+}
+
 function prepareNode(member) {
   const isDeceased = member.attributes?.lifeStatus === "Deceased";
+  const palette = getNodePalette(member.gender, isDeceased);
+  const image =
+    member.imageUrl && member.imageUrl.trim()
+      ? member.imageUrl.trim()
+      : createAvatar(member.label, member.gender, isDeceased);
   return {
     id: member.id,
     label: member.label,
     gender: member.gender,
-    image:
-      member.imageUrl && member.imageUrl.trim()
-        ? member.imageUrl.trim()
-        : createAvatar(member.label, member.gender, isDeceased),
-    shape: "circularImage",
-    borderWidth: 3,
-    shadow: {
-      enabled: true,
-      color: isDeceased ? "rgba(107, 114, 128, 0.75)" : "rgba(79, 70, 229, 0.45)",
-      size: isDeceased ? 28 : 18,
-      x: 0,
-      y: 4,
-    },
-    font: {
-      size: 16,
-      color: "#111827",
-      face: '"Inter", "Segoe UI", sans-serif',
-    },
-    title: buildTooltip(member),
+    image,
+    palette,
+    isDeceased,
+    lifeStatus: member.attributes?.lifeStatus || "Alive",
+    member,
+    tooltipHtml: buildTooltip(member),
   };
 }
 
 function formatEdge(edge) {
   const isSpouse = edge.type === "spouse";
   const isDivorced = edge.type === "divorced";
-  const colors = isSpouse
-    ? { color: "#ef4444", highlight: "#b91c1c" }
-    : isDivorced
-    ? { color: "#9ca3af", highlight: "#4b5563" }
-    : { color: "#10b981", highlight: "#047857" };
-  const label = isSpouse ? "spouse" : isDivorced ? "divorced" : "parent";
+  const color = isSpouse ? "#ef4444" : isDivorced ? "#9ca3af" : "#10b981";
+  const highlight = isSpouse ? "#b91c1c" : isDivorced ? "#4b5563" : "#047857";
   return {
     ...edge,
-    label,
-    color: { color: colors.color, highlight: colors.highlight },
-    arrows: isSpouse || isDivorced ? undefined : "to",
-    dashes: isSpouse ? true : isDivorced ? [6, 6] : false,
-    smooth: {
-      enabled: isSpouse || isDivorced,
-      type: isDivorced ? "curvedCCW" : "curvedCW",
-      roundness: 0.3,
-    },
-    font: {
-      size: 13,
-      color: "#4b5563",
-      strokeColor: "#ffffff",
-      strokeWidth: 3,
-    },
+    color,
+    highlight,
+    labelText: isSpouse ? "spouse" : isDivorced ? "divorced" : "",
+    dashArray: isSpouse ? "6,6" : isDivorced ? "4,8" : null,
+    distance: isSpouse ? 200 : isDivorced ? 220 : 150,
+    strength: isSpouse || isDivorced ? 0.5 : 0.9,
   };
 }
 
@@ -610,184 +598,463 @@ const CheckIcon = iconsSource.Check || fallbackIconFactory("✔️");
 const ExpandIcon = iconsSource.Fullscreen || fallbackIconFactory("⛶");
 const CollapseIcon = iconsSource.FullscreenExit || fallbackIconFactory("🗗");
 
-function useNetwork(members, relationships, { onSelectMember } = {}) {
+function useNetwork(
+  members,
+  relationships,
+  { onSelectMember, selectedMemberId } = {}
+) {
   const containerRef = React.useRef(null);
-  const networkRef = React.useRef(null);
-  const nodesRef = React.useRef(null);
-  const edgesRef = React.useRef(null);
+  const stateRef = React.useRef(null);
+  const simulationRef = React.useRef(null);
   const selectCallbackRef = React.useRef(onSelectMember);
-
-  const fitNetwork = React.useCallback((options = {}) => {
-    if (networkRef.current) {
-      networkRef.current.fit({
-        animation: {
-          duration: 450,
-          easingFunction: "easeInOutCubic",
-        },
-        ...options,
-      });
-    }
-  }, []);
-
-  const redrawNetwork = React.useCallback(() => {
-    networkRef.current?.redraw();
-  }, []);
+  const selectedIdRef = React.useRef(selectedMemberId ?? null);
 
   React.useEffect(() => {
     selectCallbackRef.current = onSelectMember;
   }, [onSelectMember]);
 
   React.useEffect(() => {
-    if (!containerRef.current) {
-      return undefined;
+    selectedIdRef.current = selectedMemberId ?? null;
+    const state = stateRef.current;
+    state?.updateNodeStyles?.();
+  }, [selectedMemberId]);
+
+  const fitNetwork = React.useCallback((options = {}) => {
+    const d3 = window.d3;
+    const state = stateRef.current;
+    const simulation = simulationRef.current;
+    if (!d3 || !state || !simulation) {
+      return;
     }
-    const nodes = new vis.DataSet(members.map(prepareNode));
-    const edges = new vis.DataSet(relationships.map(formatEdge));
-    nodesRef.current = nodes;
-    edgesRef.current = edges;
+    const nodes = simulation.nodes();
+    if (!nodes.length) {
+      return;
+    }
+    const width = state.size.width || 1;
+    const height = state.size.height || 1;
 
-    const options = {
-      layout: { improvedLayout: true },
-      physics: {
-        stabilization: true,
-        barnesHut: {
-          gravitationalConstant: -3500,
-          springLength: 160,
-          springConstant: 0.04,
-        },
-      },
-      edges: {
-        smooth: {
-          type: "continuous",
-          roundness: 0.3,
-        },
-        selectionWidth: 1,
-        hoverWidth: 0,
-      },
-      nodes: {
-        size: 42,
-        borderWidth: 3,
-        borderWidthSelected: 4,
-        color: {
-          border: "#6366f1",
-          background: "#eef2ff",
-          highlight: {
-            border: "#4338ca",
-            background: "#e0e7ff",
-          },
-        },
-        font: {
-          size: 16,
-          color: "#111827",
-          face: '"Inter", "Segoe UI", sans-serif',
-        },
-        imagePadding: { top: 12, bottom: 6 },
-        margin: 12,
-        shadow: true,
-      },
-      interaction: {
-        tooltipDelay: 120,
-        hover: true,
-      },
-    };
-
-    const network = new vis.Network(
-      containerRef.current,
-      { nodes, edges },
-      options
-    );
-    networkRef.current = network;
-    const handleSelectNode = (params) => {
-      const nodeId = params?.nodes?.[0];
-      if (typeof nodeId !== "undefined") {
-        selectCallbackRef.current?.(nodeId);
-      }
-    };
-    const handleDeselect = () => {
-      selectCallbackRef.current?.(null);
-    };
-    const handleClick = (params) => {
-      if (!params?.nodes?.length) {
-        handleDeselect();
-      }
-    };
-    network.on("selectNode", handleSelectNode);
-    network.on("deselectNode", handleDeselect);
-    network.on("click", handleClick);
-    const handleStabilized = () => {
-      network.setOptions({ physics: { enabled: false } });
-    };
-    network.on("stabilized", handleStabilized);
-    network.once("stabilized", () => {
-      fitNetwork();
-      handleStabilized();
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    nodes.forEach((node) => {
+      minX = Math.min(minX, node.x);
+      maxX = Math.max(maxX, node.x);
+      minY = Math.min(minY, node.y);
+      maxY = Math.max(maxY, node.y);
     });
 
-    const handleResize = () => {
-      window.requestAnimationFrame(() => {
-        fitNetwork({ animation: false });
+    if (!isFinite(minX) || !isFinite(minY)) {
+      return;
+    }
+
+    const spanX = Math.max(maxX - minX, 1);
+    const spanY = Math.max(maxY - minY, 1);
+    const padding = 160;
+    const scaleX = (width - padding) / spanX;
+    const scaleY = (height - padding) / spanY;
+    const safeScale = Math.max(
+      Math.min(Math.min(scaleX, scaleY), 2.6),
+      0.35
+    );
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const translateX = width / 2 - safeScale * centerX;
+    const translateY = height / 2 - safeScale * centerY;
+
+    const transform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(safeScale);
+
+    const svg = state.svg;
+    const zoom = state.zoomBehavior;
+    if (!svg || !zoom) {
+      return;
+    }
+
+    if (options.animation === false) {
+      svg.call(zoom.transform, transform);
+    } else {
+      svg
+        .transition()
+        .duration(options.duration ?? 520)
+        .ease(d3.easeCubicInOut)
+        .call(zoom.transform, transform);
+    }
+  }, []);
+
+  const redrawNetwork = React.useCallback(() => {
+    const simulation = simulationRef.current;
+    if (simulation) {
+      simulation.alpha(0.45).restart();
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const d3 = window.d3;
+    if (!containerRef.current || !d3) {
+      return undefined;
+    }
+    const container = containerRef.current;
+    container.innerHTML = "";
+
+    const svg = d3
+      .select(container)
+      .append("svg")
+      .attr("class", "network-canvas")
+      .attr("width", "100%")
+      .attr("height", "100%");
+
+    const defs = svg.append("defs");
+    defs
+      .append("clipPath")
+      .attr("id", "node-avatar-clip")
+      .attr("clipPathUnits", "objectBoundingBox")
+      .append("circle")
+      .attr("cx", 0.5)
+      .attr("cy", 0.5)
+      .attr("r", 0.5);
+
+    defs
+      .append("marker")
+      .attr("id", "arrow-parent")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 10)
+      .attr("refY", 0)
+      .attr("markerWidth", 10)
+      .attr("markerHeight", 10)
+      .attr("orient", "auto")
+      .attr("markerUnits", "strokeWidth")
+      .append("path")
+      .attr("d", "M0,-5L10,0L0,5")
+      .attr("fill", "#10b981");
+
+    const zoomGroup = svg.append("g").attr("class", "network-zoom");
+    const linkGroup = zoomGroup.append("g").attr("class", "network-links");
+    const labelGroup = zoomGroup.append("g").attr("class", "network-link-labels");
+    const nodeGroup = zoomGroup.append("g").attr("class", "network-nodes");
+
+    const zoomBehavior = d3
+      .zoom()
+      .scaleExtent([0.35, 2.75])
+      .on("zoom", (event) => {
+        zoomGroup.attr("transform", event.transform);
       });
+
+    svg.call(zoomBehavior);
+
+    const tooltip = document.createElement("div");
+    tooltip.className = "network-tooltip";
+    container.appendChild(tooltip);
+
+    const size = {
+      width: container.clientWidth || 800,
+      height: container.clientHeight || 600,
     };
-    window.addEventListener("resize", handleResize);
+    svg.attr("viewBox", `0 0 ${Math.max(size.width, 1)} ${Math.max(size.height, 1)}`);
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target !== container) {
+          continue;
+        }
+        size.width = entry.contentRect.width;
+        size.height = entry.contentRect.height;
+        svg.attr(
+          "viewBox",
+          `0 0 ${Math.max(size.width, 1)} ${Math.max(size.height, 1)}`
+        );
+        if (simulationRef.current) {
+          simulationRef.current.force(
+            "center",
+            d3.forceCenter(size.width / 2, size.height / 2)
+          );
+          simulationRef.current.alpha(0.35).restart();
+          window.requestAnimationFrame(() => fitNetwork({ animation: false }));
+        }
+      }
+    });
+    resizeObserver.observe(container);
+
+    stateRef.current = {
+      container,
+      svg,
+      defs,
+      zoomGroup,
+      linkGroup,
+      labelGroup,
+      nodeGroup,
+      tooltip,
+      zoomBehavior,
+      size,
+      resizeObserver,
+      updateNodeStyles: null,
+      nodeSelection: null,
+      linkSelection: null,
+      labelSelection: null,
+    };
 
     return () => {
-      network.off("selectNode", handleSelectNode);
-      network.off("deselectNode", handleDeselect);
-      network.off("click", handleClick);
-      network.off("stabilized", handleStabilized);
-      network.destroy();
-      window.removeEventListener("resize", handleResize);
+      resizeObserver.disconnect();
+      svg.on(".zoom", null);
+      tooltip.remove();
+      svg.remove();
+      stateRef.current = null;
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+        simulationRef.current = null;
+      }
     };
   }, [fitNetwork]);
 
   React.useEffect(() => {
-    if (!nodesRef.current) {
-      return;
+    const d3 = window.d3;
+    const state = stateRef.current;
+    if (!state || !d3) {
+      return undefined;
     }
-    const nodes = nodesRef.current;
-    const prepared = members.map(prepareNode);
-    nodes.update(prepared);
-    const existingIds = nodes.getIds();
-    const newIds = prepared.map((node) => node.id);
-    const toRemove = existingIds.filter((id) => !newIds.includes(id));
-    if (toRemove.length) {
-      nodes.remove(toRemove);
-    }
-    if (networkRef.current) {
-      const network = networkRef.current;
-      network.setOptions({ physics: { enabled: true } });
-      const handleOnce = () => {
-        fitNetwork({ animation: false });
-        network.off("stabilized", handleOnce);
-      };
-      network.on("stabilized", handleOnce);
-      network.stabilize();
-    }
-  }, [members, fitNetwork]);
 
-  React.useEffect(() => {
-    if (!edgesRef.current) {
-      return;
+    const tooltip = state.tooltip;
+    const hideTooltip = () => {
+      tooltip.classList.remove("show");
+      tooltip.style.transform = "translate3d(-9999px, -9999px, 0)";
+    };
+
+    const updateTooltipPosition = (event) => {
+      const rect = state.container.getBoundingClientRect();
+      const x = event.clientX - rect.left + 16;
+      const y = event.clientY - rect.top + 18;
+      tooltip.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+    };
+
+    const showTooltip = (event, node) => {
+      tooltip.innerHTML = node.tooltipHtml;
+      tooltip.classList.add("show");
+      updateTooltipPosition(event);
+    };
+
+    hideTooltip();
+
+    const nodes = members.map(prepareNode);
+    const links = relationships.map((relationship) => {
+      const formatted = formatEdge(relationship);
+      return { ...formatted, source: formatted.from, target: formatted.to };
+    });
+
+    const linkSelection = state.linkGroup
+      .selectAll("line.network-link")
+      .data(links, (d) => d.id);
+    linkSelection.exit().remove();
+    const linkEnter = linkSelection
+      .enter()
+      .append("line")
+      .attr("class", "network-link")
+      .attr("stroke-width", 3)
+      .attr("stroke-linecap", "round");
+    const mergedLinks = linkEnter.merge(linkSelection);
+    mergedLinks
+      .attr("stroke", (d) => d.color)
+      .attr("stroke-dasharray", (d) => d.dashArray || null)
+      .attr("opacity", (d) => (d.type === "divorced" ? 0.85 : 1))
+      .attr("marker-end", (d) =>
+        d.type === "parent" ? "url(#arrow-parent)" : null
+      );
+
+    const labelsData = links.filter((link) => Boolean(link.labelText));
+    const labelSelection = state.labelGroup
+      .selectAll("text.network-link-label")
+      .data(labelsData, (d) => d.id);
+    labelSelection.exit().remove();
+    const labelEnter = labelSelection
+      .enter()
+      .append("text")
+      .attr("class", "network-link-label")
+      .attr("text-anchor", "middle");
+    const mergedLabels = labelEnter.merge(labelSelection);
+    mergedLabels
+      .text((d) => d.labelText)
+      .attr("fill", (d) => d.highlight);
+
+    const dragBehavior = d3
+      .drag()
+      .on("start", (event, node) => {
+        if (!event.active && simulationRef.current) {
+          simulationRef.current.alphaTarget(0.3).restart();
+        }
+        node.fx = node.x;
+        node.fy = node.y;
+      })
+      .on("drag", (event, node) => {
+        node.fx = event.x;
+        node.fy = event.y;
+      })
+      .on("end", (event, node) => {
+        if (!event.active && simulationRef.current) {
+          simulationRef.current.alphaTarget(0);
+        }
+        node.fx = null;
+        node.fy = null;
+      });
+
+    const nodeSelection = state.nodeGroup
+      .selectAll("g.network-node")
+      .data(nodes, (d) => d.id);
+    nodeSelection.exit().remove();
+    const nodeEnter = nodeSelection
+      .enter()
+      .append("g")
+      .attr("class", "network-node")
+      .style("cursor", "pointer");
+    nodeEnter
+      .append("circle")
+      .attr("class", "node-ring")
+      .attr("r", 40)
+      .attr("stroke-width", 3);
+    nodeEnter
+      .append("image")
+      .attr("class", "node-image")
+      .attr("x", -32)
+      .attr("y", -32)
+      .attr("width", 64)
+      .attr("height", 64)
+      .attr("clip-path", "url(#node-avatar-clip)");
+    nodeEnter
+      .append("text")
+      .attr("class", "node-label")
+      .attr("text-anchor", "middle")
+      .attr("y", 48);
+    nodeEnter.append("title");
+
+    nodeEnter.call(dragBehavior);
+    nodeSelection.call(dragBehavior);
+
+    const mergedNodes = nodeEnter.merge(nodeSelection);
+    mergedNodes.classed("is-deceased", (d) => d.isDeceased);
+    mergedNodes.select("text.node-label").text((d) => d.label);
+    mergedNodes
+      .select("image.node-image")
+      .attr("href", (d) => d.image)
+      .style("filter", (d) => (d.isDeceased ? "grayscale(0.6)" : "none"));
+    mergedNodes.select("title").text((d) => d.label);
+
+    mergedNodes
+      .on("mouseenter", (event, node) => {
+        showTooltip(event, node);
+      })
+      .on("mousemove", (event) => {
+        updateTooltipPosition(event);
+      })
+      .on("mouseleave", () => {
+        hideTooltip();
+      })
+      .on("click", (event, node) => {
+        event.stopPropagation();
+        hideTooltip();
+        selectCallbackRef.current?.(node.id);
+      });
+
+    const updateNodeStyles = () => {
+      const selectedId = selectedIdRef.current;
+      mergedNodes
+        .classed("is-selected", (d) => d.id === selectedId)
+        .select("circle.node-ring")
+        .attr("stroke", (d) =>
+          d.id === selectedId ? d.palette.accent : d.palette.border
+        )
+        .attr("stroke-width", (d) => (d.id === selectedId ? 4 : 3))
+        .attr("fill", (d) => d.palette.background)
+        .attr("opacity", (d) => (d.isDeceased ? 0.85 : 1));
+      mergedNodes
+        .select("text.node-label")
+        .attr("fill", (d) =>
+          d.id === selectedId
+            ? d.palette.accent
+            : d.isDeceased
+            ? "#4b5563"
+            : "#1f2937"
+        );
+    };
+    updateNodeStyles();
+
+    state.updateNodeStyles = updateNodeStyles;
+    state.nodeSelection = mergedNodes;
+    state.linkSelection = mergedLinks;
+    state.labelSelection = mergedLabels;
+
+    let simulation = simulationRef.current;
+    if (!simulation) {
+      simulation = d3
+        .forceSimulation(nodes)
+        .force(
+          "link",
+          d3
+            .forceLink(links)
+            .id((node) => node.id)
+            .distance((link) => link.distance)
+            .strength((link) => link.strength)
+        )
+        .force("charge", d3.forceManyBody().strength(-640))
+        .force("collision", d3.forceCollide().radius(64))
+        .force(
+          "center",
+          d3.forceCenter(state.size.width / 2, state.size.height / 2)
+        );
+
+      simulation.on("tick", () => {
+        state.linkSelection
+          ?.attr("x1", (d) => d.source.x)
+          .attr("y1", (d) => d.source.y)
+          .attr("x2", (d) => d.target.x)
+          .attr("y2", (d) => d.target.y);
+        state.labelSelection
+          ?.attr("x", (d) => (d.source.x + d.target.x) / 2)
+          .attr("y", (d) => (d.source.y + d.target.y) / 2 - 12);
+        state.nodeSelection?.attr(
+          "transform",
+          (d) => `translate(${d.x},${d.y})`
+        );
+      });
+
+      simulationRef.current = simulation;
+    } else {
+      simulation.nodes(nodes);
+      simulation.force(
+        "link",
+        d3
+          .forceLink(links)
+          .id((node) => node.id)
+          .distance((link) => link.distance)
+          .strength((link) => link.strength)
+      );
+      simulation.force(
+        "center",
+        d3.forceCenter(state.size.width / 2, state.size.height / 2)
+      );
+      simulation.alpha(0.9).restart();
     }
-    const edges = edgesRef.current;
-    const formatted = relationships.map(formatEdge);
-    edges.update(formatted);
-    const existingIds = edges.getIds();
-    const newIds = formatted.map((edge) => edge.id);
-    const toRemove = existingIds.filter((id) => !newIds.includes(id));
-    if (toRemove.length) {
-      edges.remove(toRemove);
-    }
-    if (networkRef.current) {
-      const network = networkRef.current;
-      const handleOnce = () => {
-        fitNetwork({ animation: false });
-        network.off("stabilized", handleOnce);
-      };
-      network.on("stabilized", handleOnce);
-      network.stabilize();
-    }
-  }, [relationships, fitNetwork]);
+
+    const backgroundHandler = (event) => {
+      if (event.target === state.svg.node()) {
+        hideTooltip();
+        selectCallbackRef.current?.(null);
+      }
+    };
+    state.svg.on("click.background", backgroundHandler);
+
+    window.setTimeout(() => {
+      fitNetwork({ animation: false });
+    }, 140);
+
+    return () => {
+      mergedNodes
+        .on("mouseenter", null)
+        .on("mousemove", null)
+        .on("mouseleave", null)
+        .on("click", null);
+      state.svg.on("click.background", null);
+    };
+  }, [members, relationships, fitNetwork]);
 
   return { containerRef, fitNetwork, redrawNetwork };
 }
@@ -824,6 +1091,7 @@ function App() {
     relationships,
     {
       onSelectMember: setSelectedMemberId,
+      selectedMemberId,
     }
   );
 
