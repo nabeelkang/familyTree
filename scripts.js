@@ -597,6 +597,7 @@ const CloseIcon = iconsSource.Close || fallbackIconFactory("✖️");
 const CheckIcon = iconsSource.Check || fallbackIconFactory("✔️");
 const ExpandIcon = iconsSource.Fullscreen || fallbackIconFactory("⛶");
 const CollapseIcon = iconsSource.FullscreenExit || fallbackIconFactory("🗗");
+const SearchIcon = iconsSource.Search || fallbackIconFactory("🔍");
 
 function useNetwork(
   members,
@@ -914,10 +915,11 @@ function useNetwork(
     nodeEnter
       .append("image")
       .attr("class", "node-image")
-      .attr("x", -32)
-      .attr("y", -32)
-      .attr("width", 64)
-      .attr("height", 64)
+      .attr("x", -40)
+      .attr("y", -40)
+      .attr("width", 80)
+      .attr("height", 80)
+      .attr("preserveAspectRatio", "xMidYMid slice")
       .attr("clip-path", "url(#node-avatar-clip)");
     nodeEnter
       .append("text")
@@ -935,6 +937,11 @@ function useNetwork(
     mergedNodes
       .select("image.node-image")
       .attr("href", (d) => d.image)
+      .attr("x", -40)
+      .attr("y", -40)
+      .attr("width", 80)
+      .attr("height", 80)
+      .attr("preserveAspectRatio", "xMidYMid slice")
       .style("filter", (d) => (d.isDeceased ? "grayscale(0.6)" : "none"));
     mergedNodes.select("title").text((d) => d.label);
 
@@ -1085,6 +1092,8 @@ function App() {
   const [editingMemberDraft, setEditingMemberDraft] = React.useState(null);
   const [editingNameError, setEditingNameError] = React.useState("");
   const [alertMessage, setAlertMessage] = React.useState(null);
+  const [memberSearch, setMemberSearch] = React.useState("");
+  const [relationshipSearch, setRelationshipSearch] = React.useState("");
 
   const { containerRef, fitNetwork, redrawNetwork } = useNetwork(
     members,
@@ -1161,6 +1170,69 @@ function App() {
     () => [...members].sort((a, b) => a.label.localeCompare(b.label)),
     [members]
   );
+
+  const memberById = React.useMemo(() => {
+    const map = new Map();
+    members.forEach((member) => {
+      map.set(member.id, member);
+    });
+    return map;
+  }, [members]);
+
+  const filteredMembers = React.useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    if (!query) {
+      return sortedMembers;
+    }
+    return sortedMembers.filter((member) => {
+      const attributeEntries = Object.entries(member.attributes || {});
+      const combined = [
+        member.label,
+        member.gender,
+        member.id != null ? String(member.id) : "",
+        ...attributeEntries.flatMap(([key, value]) => [key, value]),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return combined.includes(query);
+    });
+  }, [sortedMembers, memberSearch]);
+
+  const filteredRelationships = React.useMemo(() => {
+    const query = relationshipSearch.trim().toLowerCase();
+    const sorted = [...relationships].sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type.localeCompare(b.type);
+      }
+      if (a.from !== b.from) {
+        return a.from - b.from;
+      }
+      return a.to - b.to;
+    });
+    if (!query) {
+      return sorted;
+    }
+    return sorted.filter((relationship) => {
+      const fromMember = memberById.get(relationship.from) || null;
+      const toMember = memberById.get(relationship.to) || null;
+      const values = [
+        relationship.type,
+        relationship.id,
+        relationship.from != null ? String(relationship.from) : "",
+        relationship.to != null ? String(relationship.to) : "",
+        fromMember?.label || "Unknown",
+        toMember?.label || "Unknown",
+        relationship.type === "parent" ? "Parent Child" : "",
+        relationship.type === "spouse" ? "Spouse" : "",
+        relationship.type === "divorced" ? "Divorced" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return values.includes(query);
+    });
+  }, [relationships, relationshipSearch, memberById]);
 
   const relationshipOptions = React.useMemo(
     () =>
@@ -2062,6 +2134,32 @@ function App() {
 
                   {tab === "members" && (
                     <Box sx={{ flexGrow: 1, overflow: "auto" }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 1.5,
+                          pb: 2,
+                        }}
+                      >
+                        <TextField
+                          value={memberSearch}
+                          onChange={(event) => setMemberSearch(event.target.value)}
+                          size="small"
+                          placeholder="Search members…"
+                          type="search"
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <SearchIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{ minWidth: { xs: "100%", sm: 260 }, maxWidth: 360 }}
+                        />
+                      </Box>
                       <Table size="medium">
                         <TableHead>
                           <TableRow>
@@ -2072,16 +2170,18 @@ function App() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {sortedMembers.length === 0 && (
+                          {filteredMembers.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={4}>
                                 <Typography align="center" color="text.secondary">
-                                  Add your first member to begin building the tree.
+                                  {memberSearch.trim()
+                                    ? "No members match your search."
+                                    : "Add your first member to begin building the tree."}
                                 </Typography>
                               </TableCell>
                             </TableRow>
                           )}
-                          {sortedMembers.map((member) => {
+                          {filteredMembers.map((member) => {
                             const isDeceased = member.attributes?.lifeStatus === "Deceased";
                             const isEditing = editingMemberId === member.id;
                             const draft = isEditing && editingMemberDraft ? editingMemberDraft : null;
@@ -2327,6 +2427,34 @@ function App() {
 
                   {tab === "relationships" && (
                     <Box sx={{ flexGrow: 1, overflow: "auto" }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: 1.5,
+                          pb: 2,
+                        }}
+                      >
+                        <TextField
+                          value={relationshipSearch}
+                          onChange={(event) =>
+                            setRelationshipSearch(event.target.value)
+                          }
+                          size="small"
+                          placeholder="Search relationships…"
+                          type="search"
+                          InputProps={{
+                            startAdornment: (
+                              <InputAdornment position="start">
+                                <SearchIcon fontSize="small" />
+                              </InputAdornment>
+                            ),
+                          }}
+                          sx={{ minWidth: { xs: "100%", sm: 260 }, maxWidth: 360 }}
+                        />
+                      </Box>
                       <Table size="medium">
                         <TableHead>
                           <TableRow>
@@ -2336,46 +2464,80 @@ function App() {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {relationships.length === 0 && (
+                          {filteredRelationships.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={3}>
                                 <Typography align="center" color="text.secondary">
-                                  No relationships yet. Create one to connect your members.
+                                  {relationships.length === 0
+                                    ? "No relationships yet. Create one to connect your members."
+                                    : "No relationships match your search."}
                                 </Typography>
                               </TableCell>
                             </TableRow>
                           )}
-                          {[...relationships]
-                            .sort((a, b) => {
-                              if (a.type !== b.type) {
-                                return a.type.localeCompare(b.type);
-                              }
-                              if (a.from !== b.from) {
-                                return a.from - b.from;
-                              }
-                              return a.to - b.to;
-                            })
-                            .map((relationship) => {
-                              const fromMember = members.find(
-                                (member) => member.id === relationship.from
-                              );
-                              const toMember = members.find(
-                                (member) => member.id === relationship.to
-                              );
-                              return (
-                                <TableRow key={relationship.id}>
-                                  <TableCell>
-                                    {relationship.type === "spouse"
-                                      ? "Spouses"
-                                      : relationship.type === "divorced"
-                                      ? "Divorced"
-                                      : "Parent → Child"}
-                                  </TableCell>
-                                  <TableCell>{fromMember?.label || "Unknown"}</TableCell>
-                                  <TableCell>{toMember?.label || "Unknown"}</TableCell>
-                                </TableRow>
-                              );
-                            })}
+                          {filteredRelationships.map((relationship) => {
+                            const fromMember = memberById.get(relationship.from) || null;
+                            const toMember = memberById.get(relationship.to) || null;
+                            const fromAssets = getMemberAvatarAssets(fromMember);
+                            const toAssets = getMemberAvatarAssets(toMember);
+                            const fromName = fromMember?.label || "Unknown";
+                            const toName = toMember?.label || "Unknown";
+                            return (
+                              <TableRow key={relationship.id}>
+                                <TableCell>
+                                  {relationship.type === "spouse"
+                                    ? "Spouses"
+                                    : relationship.type === "divorced"
+                                    ? "Divorced"
+                                    : "Parent → Child"}
+                                </TableCell>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Avatar
+                                      src={fromAssets.avatar || undefined}
+                                      alt={fromName}
+                                      imgProps={
+                                        fromAssets.customAvatar && fromAssets.fallbackAvatar
+                                          ? {
+                                              onError: (event) => {
+                                                event.target.onerror = null;
+                                                event.target.src = fromAssets.fallbackAvatar;
+                                              },
+                                            }
+                                          : undefined
+                                      }
+                                      sx={{ width: 36, height: 36, fontSize: 14 }}
+                                    >
+                                      {!fromAssets.avatar && fromName.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Typography>{fromName}</Typography>
+                                  </Stack>
+                                </TableCell>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Avatar
+                                      src={toAssets.avatar || undefined}
+                                      alt={toName}
+                                      imgProps={
+                                        toAssets.customAvatar && toAssets.fallbackAvatar
+                                          ? {
+                                              onError: (event) => {
+                                                event.target.onerror = null;
+                                                event.target.src = toAssets.fallbackAvatar;
+                                              },
+                                            }
+                                          : undefined
+                                      }
+                                      sx={{ width: 36, height: 36, fontSize: 14 }}
+                                    >
+                                      {!toAssets.avatar && toName.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Typography>{toName}</Typography>
+                                  </Stack>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                         </TableBody>
                       </Table>
                     </Box>
