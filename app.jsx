@@ -276,7 +276,6 @@ function useNetwork(
   const simulationRef = React.useRef(null);
   const selectCallbackRef = React.useRef(onSelectMember);
   const selectedIdRef = React.useRef(selectedMemberId ?? null);
-  const containerNode = containerRef.current;
 
   React.useEffect(() => {
     selectCallbackRef.current = onSelectMember;
@@ -361,6 +360,7 @@ function useNetwork(
   }, []);
 
   React.useEffect(() => {
+    const containerNode = containerRef.current;
     const d3 = window.d3;
     if (!containerNode || !d3) {
       return undefined;
@@ -495,7 +495,7 @@ function useNetwork(
         simulationRef.current = null;
       }
     };
-  }, [containerNode, fitNetwork]);
+  }, [fitNetwork]);
 
   React.useEffect(() => {
     const d3 = window.d3;
