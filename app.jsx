@@ -1,5 +1,26 @@
 const { AppLayout } = window.FamilyTreeComponents;
 
+const NODE_RADIUS = 40;
+const ARROW_TARGET_PADDING = 6;
+
+function getLinkTargetPoint(link) {
+  if (link.type !== "parent") {
+    return { x: link.target.x, y: link.target.y };
+  }
+  const dx = link.target.x - link.source.x;
+  const dy = link.target.y - link.source.y;
+  const distance = Math.hypot(dx, dy);
+  if (!distance || !isFinite(distance)) {
+    return { x: link.target.x, y: link.target.y };
+  }
+  const offset = Math.min(NODE_RADIUS + ARROW_TARGET_PADDING, distance);
+  const ratio = (distance - offset) / distance;
+  return {
+    x: link.source.x + dx * ratio,
+    y: link.source.y + dy * ratio,
+  };
+}
+
 const {
   loadFromStorage,
   persistToStorage,
@@ -429,14 +450,23 @@ function useNetwork(
         );
 
       simulation.on("tick", () => {
-        state.linkSelection
-          ?.attr("x1", (d) => d.source.x)
-          .attr("y1", (d) => d.source.y)
-          .attr("x2", (d) => d.target.x)
-          .attr("y2", (d) => d.target.y);
+        state.linkSelection?.each(function (link) {
+          const targetPoint = getLinkTargetPoint(link);
+          link.__displayTarget = targetPoint;
+          this.setAttribute("x1", link.source.x);
+          this.setAttribute("y1", link.source.y);
+          this.setAttribute("x2", targetPoint.x);
+          this.setAttribute("y2", targetPoint.y);
+        });
         state.labelSelection
-          ?.attr("x", (d) => (d.source.x + d.target.x) / 2)
-          .attr("y", (d) => (d.source.y + d.target.y) / 2 - 12);
+          ?.attr("x", (link) => {
+            const targetPoint = link.__displayTarget || getLinkTargetPoint(link);
+            return (link.source.x + targetPoint.x) / 2;
+          })
+          .attr("y", (link) => {
+            const targetPoint = link.__displayTarget || getLinkTargetPoint(link);
+            return (link.source.y + targetPoint.y) / 2 - 12;
+          });
         state.nodeSelection?.attr(
           "transform",
           (d) => `translate(${d.x},${d.y})`
