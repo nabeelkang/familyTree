@@ -276,6 +276,7 @@ function useNetwork(
   const simulationRef = React.useRef(null);
   const selectCallbackRef = React.useRef(onSelectMember);
   const selectedIdRef = React.useRef(selectedMemberId ?? null);
+  const containerNode = containerRef.current;
 
   React.useEffect(() => {
     selectCallbackRef.current = onSelectMember;
@@ -361,10 +362,10 @@ function useNetwork(
 
   React.useEffect(() => {
     const d3 = window.d3;
-    if (!containerRef.current || !d3) {
+    if (!containerNode || !d3) {
       return undefined;
     }
-    const container = containerRef.current;
+    const container = containerNode;
     container.innerHTML = "";
 
     const svg = d3
@@ -387,36 +388,36 @@ function useNetwork(
     defs
       .append("marker")
       .attr("id", "dot-parent")
-      .attr("viewBox", "-6 -6 12 12")
+      .attr("viewBox", "-10 -10 20 20")
       .attr("refX", 0)
       .attr("refY", 0)
-      .attr("markerWidth", 9)
-      .attr("markerHeight", 9)
+      .attr("markerWidth", 12)
+      .attr("markerHeight", 12)
       .attr("orient", "auto")
       .attr("markerUnits", "strokeWidth")
       .append("circle")
       .attr("cx", 0)
       .attr("cy", 0)
-      .attr("r", 3.2)
+      .attr("r", 4.2)
       .attr("fill", "#0f766e")
       .attr("stroke", "#ecfdf5")
-      .attr("stroke-width", 1.2);
+      .attr("stroke-width", 1.4);
 
     defs
       .append("marker")
       .attr("id", "arrow-parent")
-      .attr("viewBox", "0 -7 14 14")
-      .attr("refX", 12)
+      .attr("viewBox", "0 -12 24 24")
+      .attr("refX", 18)
       .attr("refY", 0)
-      .attr("markerWidth", 13)
-      .attr("markerHeight", 13)
+      .attr("markerWidth", 18)
+      .attr("markerHeight", 18)
       .attr("orient", "auto")
       .attr("markerUnits", "strokeWidth")
       .append("path")
-      .attr("d", "M0,-7L14,0L0,7")
-      .attr("fill", "#059669")
+      .attr("d", "M0,-12L24,0L0,12L6,0Z")
+      .attr("fill", "#047857")
       .attr("stroke", "#ecfdf5")
-      .attr("stroke-width", 0.9);
+      .attr("stroke-width", 1.1);
 
     const zoomGroup = svg.append("g").attr("class", "network-zoom");
     const linkGroup = zoomGroup.append("g").attr("class", "network-links");
@@ -494,7 +495,7 @@ function useNetwork(
         simulationRef.current = null;
       }
     };
-  }, [fitNetwork]);
+  }, [containerNode, fitNetwork]);
 
   React.useEffect(() => {
     const d3 = window.d3;
