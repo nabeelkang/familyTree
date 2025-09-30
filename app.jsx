@@ -138,18 +138,18 @@ function useNetwork(
     defs
       .append("marker")
       .attr("id", "arrow-parent")
-      .attr("viewBox", "0 0 16 16")
-      .attr("refX", 13)
-      .attr("refY", 8)
-      .attr("markerWidth", 14)
-      .attr("markerHeight", 14)
+      .attr("viewBox", "0 0 18 18")
+      .attr("refX", 14)
+      .attr("refY", 9)
+      .attr("markerWidth", 18)
+      .attr("markerHeight", 18)
       .attr("orient", "auto")
       .attr("markerUnits", "strokeWidth")
       .append("path")
-      .attr("d", "M2,2 L14,8 L2,14 L5.5,8 Z")
-      .attr("fill", "#047857")
-      .attr("stroke", "#ecfdf5")
-      .attr("stroke-width", 1.2);
+      .attr("d", "M3,2 L16,9 L3,16 L7.5,9 Z")
+      .attr("fill", "#10b981")
+      .attr("stroke", "#065f46")
+      .attr("stroke-width", 1.5);
 
     const zoomGroup = svg.append("g").attr("class", "network-zoom");
     const linkGroup = zoomGroup.append("g").attr("class", "network-links");
