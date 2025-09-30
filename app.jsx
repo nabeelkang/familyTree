@@ -1,4 +1,4 @@
-import { AppLayout } from "./components/AppLayout.jsx";
+const { AppLayout } = window.FamilyTreeComponents;
 
 const {
   loadFromStorage,
