@@ -315,7 +315,7 @@
         ? "Spouse"
         : isDivorced
         ? "Divorced"
-        : "Parent → Child",
+        : "Parent ➜ Child",
       dashArray: isSpouse ? "6,6" : isDivorced ? "4,8" : null,
       distance: isSpouse ? 200 : isDivorced ? 220 : 150,
       strength: isSpouse || isDivorced ? 0.5 : 0.9,
