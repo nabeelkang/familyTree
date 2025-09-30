@@ -1,16 +1,17 @@
-import {
-  AddIcon,
-  DeleteIcon,
-  EditIcon,
-  CloseIcon,
-  CheckIcon,
-  ExpandIcon,
-  CollapseIcon,
-  SearchIcon,
-} from "../icons.js";
-import { MemberDetailPanel } from "./MemberDetailPanel.jsx";
-
-const {
+((global) => {
+  const namespace =
+    global.FamilyTreeComponents || (global.FamilyTreeComponents = {});
+  const {
+    AddIcon,
+    DeleteIcon,
+    EditIcon,
+    CloseIcon,
+    CheckIcon,
+    ExpandIcon,
+    CollapseIcon,
+    SearchIcon,
+  } = global.FamilyTreeIcons;
+  const {
   AppBar,
   Toolbar,
   Typography,
@@ -43,12 +44,14 @@ const {
   Avatar,
   Paper,
   Alert,
-} = MaterialUI;
+} = global.MaterialUI;
 
-const { logoDataUri, createAvatar, getMemberAvatarAssets } =
-  window.FamilyTreeData;
+  const { logoDataUri, createAvatar, getMemberAvatarAssets } =
+    global.FamilyTreeData;
 
-export function AppLayout({
+  const { MemberDetailPanel } = namespace;
+
+  function AppLayout({
   tabState,
   graphState,
   network,
@@ -1169,4 +1172,7 @@ export function AppLayout({
       )}
     </Box>
   );
-}
+  }
+
+  namespace.AppLayout = AppLayout;
+})(window);
