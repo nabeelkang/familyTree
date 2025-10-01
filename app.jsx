@@ -1,7 +1,6 @@
 const React = window.React;
 const ReactDOM = window.ReactDOM;
 const { AppLayout } = window.FamilyTreeComponents;
-const { HashRouter, useLocation, useNavigate } = window.ReactRouterDOM;
 const { useNetwork } = window.FamilyTreeGraph;
 const { useMemberManagement } = window.FamilyTreeMembers;
 const { useRelationshipManagement } = window.FamilyTreeRelationships;
@@ -33,14 +32,62 @@ function normalizePathname(pathname) {
   return pathname || "/";
 }
 
-function useTabNavigation() {
-  const location = useLocation();
-  const navigate = useNavigate();
+function getInitialHashPath() {
+  if (typeof window === "undefined") {
+    return "/";
+  }
+  const rawHash = window.location.hash || "";
+  const trimmed = rawHash.replace(/^#/, "");
+  const path = trimmed ? (trimmed.startsWith("/") ? trimmed : `/${trimmed}`) : "/";
+  return normalizePathname(path);
+}
 
-  const normalizedPath = React.useMemo(
-    () => normalizePathname(location.pathname || "/"),
-    [location.pathname]
-  );
+function useHashNavigation() {
+  const [path, setPath] = React.useState(() => getInitialHashPath());
+
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      setPath(getInitialHashPath());
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const navigate = React.useCallback((targetPath, options = {}) => {
+    const normalized = normalizePathname(targetPath);
+    const hashValue =
+      normalized === "/"
+        ? ""
+        : normalized.startsWith("/")
+        ? normalized.slice(1)
+        : normalized;
+    const targetHash = `#${hashValue}`;
+    const currentHash = window.location.hash || "";
+
+    if (options.replace) {
+      const { pathname, search } = window.location;
+      if (currentHash !== targetHash) {
+        window.history.replaceState(null, "", `${pathname}${search}${targetHash}`);
+      }
+      setPath(normalized);
+      return;
+    }
+
+    if (currentHash !== targetHash) {
+      window.location.hash = hashValue;
+      return;
+    }
+
+    setPath(normalized);
+  }, []);
+
+  return { path, navigate };
+}
+
+function useTabNavigation() {
+  const { path, navigate } = useHashNavigation();
+
+  const normalizedPath = React.useMemo(() => path, [path]);
 
   const matchedTab = React.useMemo(() => {
     if (normalizedPath === "/" || normalizedPath === "") {
@@ -369,12 +416,4 @@ function App() {
     </ThemeProvider>
   );
 }
-function AppWithRouter() {
-  return (
-    <HashRouter>
-      <App />
-    </HashRouter>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<AppWithRouter />);
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
