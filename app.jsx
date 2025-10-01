@@ -1,3 +1,5 @@
+const React = window.React;
+const ReactDOM = window.ReactDOM;
 const { AppLayout } = window.FamilyTreeComponents;
 const { HashRouter, useLocation, useNavigate } = window.ReactRouterDOM;
 
