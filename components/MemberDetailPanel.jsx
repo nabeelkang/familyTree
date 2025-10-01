@@ -22,9 +22,11 @@
       ? getMemberAvatarAssets(member)
       : emptyAvatarAssets;
     const address = member?.attributes?.address || "";
+    const dateOfBirth = member?.attributes?.dateOfBirth || "";
     const otherAttributes = hasSelection
       ? Object.entries(member.attributes || {}).filter(
-          ([key]) => key !== "lifeStatus" && key !== "address"
+          ([key]) =>
+            key !== "lifeStatus" && key !== "address" && key !== "dateOfBirth"
         )
       : [];
     const mapUrl = address
@@ -125,6 +127,16 @@
                   </Stack>
                 </Box>
               </Stack>
+              {dateOfBirth && (
+                <Box>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    Date of Birth
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    {dateOfBirth}
+                  </Typography>
+                </Box>
+              )}
               {address && (
                 <Box>
                   <Typography variant="subtitle2" color="text.secondary">
