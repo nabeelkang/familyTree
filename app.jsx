@@ -1,4 +1,5 @@
 const { AppLayout } = window.FamilyTreeComponents;
+const { HashRouter, useLocation, useNavigate } = window.ReactRouterDOM;
 
 const NODE_RADIUS = 40;
 const ARROW_TARGET_PADDING = 6;
@@ -37,6 +38,66 @@ const {
 } = window.FamilyTreeData;
 
 const { CssBaseline, ThemeProvider, createTheme } = MaterialUI;
+
+const TAB_ROUTES = {
+  overview: "/overview",
+  graph: "/graph",
+  members: "/members",
+  relationships: "/relationships",
+};
+
+const ROUTE_TO_TAB = Object.entries(TAB_ROUTES).reduce((acc, [tab, path]) => {
+  acc[path] = tab;
+  return acc;
+}, {});
+
+function normalizePathname(pathname) {
+  if (!pathname) {
+    return "/";
+  }
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    return pathname.replace(/\/+$/, "");
+  }
+  return pathname || "/";
+}
+
+function useTabNavigation() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const normalizedPath = React.useMemo(
+    () => normalizePathname(location.pathname || "/"),
+    [location.pathname]
+  );
+
+  const matchedTab = React.useMemo(() => {
+    if (normalizedPath === "/" || normalizedPath === "") {
+      return "overview";
+    }
+    return ROUTE_TO_TAB[normalizedPath] || null;
+  }, [normalizedPath]);
+
+  React.useEffect(() => {
+    if (normalizedPath === "/" || matchedTab === null) {
+      navigate(TAB_ROUTES.overview, { replace: true });
+    }
+  }, [normalizedPath, matchedTab, navigate]);
+
+  const handleTabChange = React.useCallback(
+    (value) => {
+      const targetPath = TAB_ROUTES[value] || TAB_ROUTES.overview;
+      if (targetPath !== normalizedPath) {
+        navigate(targetPath);
+      }
+    },
+    [navigate, normalizedPath]
+  );
+
+  return {
+    tab: matchedTab ?? "overview",
+    onTabChange: handleTabChange,
+  };
+}
 
 function useNetwork(
   members,
@@ -538,7 +599,6 @@ function App() {
   const [relationships, setRelationships] = React.useState(
     initialData.relationships
   );
-  const [tab, setTab] = React.useState("overview");
   const [graphExpanded, setGraphExpanded] = React.useState(false);
 
   const [memberName, setMemberName] = React.useState("");
@@ -561,6 +621,8 @@ function App() {
   const [alertMessage, setAlertMessage] = React.useState(null);
   const [memberSearch, setMemberSearch] = React.useState("");
   const [relationshipSearch, setRelationshipSearch] = React.useState("");
+
+  const { tab, onTabChange } = useTabNavigation();
 
   const { containerRef, fitNetwork, redrawNetwork } = useNetwork(
     members,
@@ -1144,8 +1206,6 @@ function App() {
     }
   };
 
-  const handleTabChange = (value) => setTab(value);
-
   const handleToggleGraphExpanded = React.useCallback(() => {
     setGraphExpanded((prev) => {
       const next = !prev;
@@ -1167,7 +1227,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AppLayout
-        tabState={{ value: tab, onChange: handleTabChange }}
+        tabState={{ value: tab, onChange: onTabChange }}
         graphState={{
           expanded: graphExpanded,
           onToggle: handleToggleGraphExpanded,
@@ -1244,4 +1304,12 @@ function App() {
 
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+function AppWithRouter() {
+  return (
+    <HashRouter>
+      <App />
+    </HashRouter>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<AppWithRouter />);
