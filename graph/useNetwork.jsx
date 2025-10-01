@@ -481,7 +481,7 @@
         hideTooltip();
         simulation.on("tick", null);
       };
-    }, [members, relationships]);
+    }, [members, relationships, containerNode]);
 
     return { containerRef, fitNetwork, redrawNetwork };
   }
