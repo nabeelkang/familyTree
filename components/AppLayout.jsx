@@ -75,6 +75,7 @@
     gender: memberGender,
     lifeStatus: memberLifeStatus,
     address: memberAddress,
+    dateOfBirth: memberDateOfBirth,
     imageUrl: memberImageUrl,
     attributes: memberAttributes,
     nameError: memberNameError,
@@ -82,6 +83,7 @@
     onGenderChange: onMemberGenderChange,
     onLifeStatusChange: onMemberLifeStatusChange,
     onAddressChange: onMemberAddressChange,
+    onDateOfBirthChange: onMemberDateOfBirthChange,
     onImageUrlChange: onMemberImageUrlChange,
     onAddAttribute: onAddMemberAttribute,
     onAttributeChange: onMemberAttributeChange,
@@ -206,8 +208,20 @@
         />
       );
     }
+    if (member.attributes?.dateOfBirth) {
+      chips.push(
+        <Chip
+          key="dateOfBirth"
+          label={`Born: ${member.attributes.dateOfBirth}`}
+          size="small"
+          variant="outlined"
+        />
+      );
+    }
     Object.entries(member.attributes || {})
-      .filter(([key]) => key !== "lifeStatus" && key !== "address")
+      .filter(
+        ([key]) => key !== "lifeStatus" && key !== "address" && key !== "dateOfBirth"
+      )
       .forEach(([key, value]) => {
         chips.push(
           <Chip key={key} label={`${key}: ${value}`} size="small" variant="outlined" />
@@ -358,6 +372,16 @@
                           value={memberAddress}
                           onChange={(event) => onMemberAddressChange(event.target.value)}
                           placeholder="e.g. 123 Main St, Springfield"
+                          fullWidth
+                        />
+                        <TextField
+                          label="Date of Birth"
+                          type="date"
+                          value={memberDateOfBirth}
+                          onChange={(event) =>
+                            onMemberDateOfBirthChange(event.target.value)
+                          }
+                          InputLabelProps={{ shrink: true }}
                           fullWidth
                         />
                         <TextField
@@ -778,11 +802,22 @@
                             avatarSource && avatarSource.length > 0
                               ? avatarSource
                               : fallbackAvatar;
-                          const secondaryLine =
-                            member.attributes?.address ||
-                            member.attributes?.occupation ||
-                            member.attributes?.hometown ||
-                            "";
+                          const secondaryLineParts = [];
+                          if (member.attributes?.dateOfBirth) {
+                            secondaryLineParts.push(
+                              `Born ${member.attributes.dateOfBirth}`
+                            );
+                          }
+                          if (member.attributes?.address) {
+                            secondaryLineParts.push(member.attributes.address);
+                          }
+                          if (member.attributes?.occupation) {
+                            secondaryLineParts.push(member.attributes.occupation);
+                          }
+                          if (member.attributes?.hometown) {
+                            secondaryLineParts.push(member.attributes.hometown);
+                          }
+                          const secondaryLine = secondaryLineParts.join(" • ");
                           return (
                             <TableRow key={member.id} hover selected={isEditing}>
                               <TableCell sx={{ minWidth: 220 }}>
@@ -895,6 +930,24 @@
                                       }
                                       size="small"
                                       fullWidth
+                                    />
+                                    <TextField
+                                      label="Date of Birth"
+                                      type="date"
+                                      value={
+                                        draft?.dateOfBirth ??
+                                        member.attributes?.dateOfBirth ??
+                                        ""
+                                      }
+                                      onChange={(event) =>
+                                        onEditingFieldChange(
+                                          "dateOfBirth",
+                                          event.target.value
+                                        )
+                                      }
+                                      size="small"
+                                      fullWidth
+                                      InputLabelProps={{ shrink: true }}
                                     />
                                     <TextField
                                       label="Photo URL"

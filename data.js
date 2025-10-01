@@ -17,6 +17,7 @@
           lifeStatus: "Alive",
           occupation: "Engineer",
           address: "1200 Pine St, Seattle, WA",
+          dateOfBirth: "1970-08-12",
         },
       },
       {
@@ -25,7 +26,11 @@
         gender: "female",
         imageUrl:
           "https://as2.ftcdn.net/v2/jpg/14/16/03/35/1000_F_1416033509_ud5Bt37B3E58hEyA10qfpmP5nWg82ozR.jpg",
-        attributes: { lifeStatus: "Deceased", address: "45 Maple Ave, Eugene, OR" },
+        attributes: {
+          lifeStatus: "Deceased",
+          address: "45 Maple Ave, Eugene, OR",
+          dateOfBirth: "1972-03-04",
+        },
       },
       {
         id: 3,
@@ -37,6 +42,7 @@
           lifeStatus: "Alive",
           hometown: "Portland",
           address: "300 Riverwalk Dr, Portland, OR",
+          dateOfBirth: "1980-11-22",
         },
       },
       {
@@ -45,7 +51,11 @@
         gender: "male",
         imageUrl:
           "https://as1.ftcdn.net/v2/jpg/15/13/67/74/1000_F_1513677460_9ZE0mmpsntQgSTfQwWPpkMa2ToXf94SO.jpg",
-        attributes: { lifeStatus: "Alive", address: "102 Garden Ln, Spokane, WA" },
+        attributes: {
+          lifeStatus: "Alive",
+          address: "102 Garden Ln, Spokane, WA",
+          dateOfBirth: "1995-06-18",
+        },
       },
       {
         id: 5,
@@ -57,6 +67,7 @@
           lifeStatus: "Alive",
           hobby: "Painting",
           address: "780 Sunset Blvd, Boise, ID",
+          dateOfBirth: "1998-02-09",
         },
       },
       {
@@ -65,7 +76,11 @@
         gender: "male",
         imageUrl:
           "https://as2.ftcdn.net/v2/jpg/15/07/83/75/1000_F_1507837582_4PfjhXazq5b6L57hvgrTKh37EScUKrND.webp",
-        attributes: { lifeStatus: "Alive", address: "18 Orchard Rd, Salem, OR" },
+        attributes: {
+          lifeStatus: "Alive",
+          address: "18 Orchard Rd, Salem, OR",
+          dateOfBirth: "2010-05-03",
+        },
       },
     ],
     relationships: [
@@ -324,7 +339,8 @@
 
   function attributesToCustomList(attributes) {
     const entries = Object.entries(attributes || {}).filter(
-      ([key]) => key !== "lifeStatus" && key !== "address"
+      ([key]) =>
+        key !== "lifeStatus" && key !== "address" && key !== "dateOfBirth"
     );
     if (!entries.length) {
       return [];
@@ -332,11 +348,20 @@
     return entries.map(([key, value]) => ({ id: createAttributeId(), key, value }));
   }
 
-  function compileAttributes(lifeStatus, customAttributes, address = "") {
+  function compileAttributes(
+    lifeStatus,
+    customAttributes,
+    address = "",
+    dateOfBirth = ""
+  ) {
     const attributes = { lifeStatus };
     const trimmedAddress = address.trim();
     if (trimmedAddress) {
       attributes.address = trimmedAddress;
+    }
+    const trimmedDateOfBirth = dateOfBirth.trim();
+    if (trimmedDateOfBirth) {
+      attributes.dateOfBirth = trimmedDateOfBirth;
     }
     customAttributes.forEach((attr) => {
       const key = attr.key.trim();

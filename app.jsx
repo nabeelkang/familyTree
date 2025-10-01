@@ -545,6 +545,7 @@ function App() {
   const [memberGender, setMemberGender] = React.useState("female");
   const [memberLifeStatus, setMemberLifeStatus] = React.useState("Alive");
   const [memberAddress, setMemberAddress] = React.useState("");
+  const [memberDateOfBirth, setMemberDateOfBirth] = React.useState("");
   const [memberImageUrl, setMemberImageUrl] = React.useState("");
   const [memberAttributes, setMemberAttributes] = React.useState([]);
   const [memberNameError, setMemberNameError] = React.useState("");
@@ -742,6 +743,7 @@ function App() {
     setMemberGender("female");
     setMemberLifeStatus("Alive");
     setMemberAddress("");
+    setMemberDateOfBirth("");
     setMemberImageUrl("");
     setMemberAttributes([]);
     setMemberNameError("");
@@ -771,6 +773,7 @@ function App() {
       gender: member.gender,
       lifeStatus: member.attributes?.lifeStatus || "Alive",
       address: member.attributes?.address || "",
+      dateOfBirth: member.attributes?.dateOfBirth || "",
       imageUrl: member.imageUrl || "",
       customAttributes: attributesToCustomList(member.attributes),
     });
@@ -852,7 +855,8 @@ function App() {
       attributes: compileAttributes(
         editingMemberDraft.lifeStatus,
         editingMemberDraft.customAttributes,
-        editingMemberDraft.address
+        editingMemberDraft.address,
+        editingMemberDraft.dateOfBirth
       ),
     };
     setMembers((prev) =>
@@ -880,7 +884,8 @@ function App() {
       attributes: compileAttributes(
         memberLifeStatus,
         memberAttributes,
-        memberAddress
+        memberAddress,
+        memberDateOfBirth
       ),
     };
     setMembers((prev) => [...prev, newMember]);
@@ -1058,6 +1063,7 @@ function App() {
           gender: memberGender,
           lifeStatus: memberLifeStatus,
           address: memberAddress,
+          dateOfBirth: memberDateOfBirth,
           imageUrl: memberImageUrl,
           attributes: memberAttributes,
           nameError: memberNameError,
@@ -1065,6 +1071,7 @@ function App() {
           onGenderChange: setMemberGender,
           onLifeStatusChange: setMemberLifeStatus,
           onAddressChange: setMemberAddress,
+          onDateOfBirthChange: setMemberDateOfBirth,
           onImageUrlChange: setMemberImageUrl,
           onAddAttribute: handleAddAttribute,
           onAttributeChange: handleMemberAttributeChange,
