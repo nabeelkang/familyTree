@@ -372,7 +372,7 @@
         .append("text")
         .attr("class", "node-label")
         .attr("text-anchor", "middle")
-        .attr("y", 48);
+        .attr("y", 56);
       nodeEnter.append("title");
 
       nodeEnter.call(dragBehavior);
@@ -380,7 +380,10 @@
 
       const mergedNodes = nodeEnter.merge(nodeSelection);
       mergedNodes.classed("is-deceased", (d) => d.isDeceased);
-      mergedNodes.select("text.node-label").text((d) => d.label);
+      mergedNodes
+        .select("text.node-label")
+        .attr("y", 56)
+        .text((d) => d.label);
       mergedNodes
         .select("image.node-image")
         .attr("href", (d) => d.image)
