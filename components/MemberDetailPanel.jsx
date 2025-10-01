@@ -16,6 +16,21 @@
 
   const { getMemberAvatarAssets, emptyAvatarAssets } = global.FamilyTreeData;
 
+  const formatDateOfBirth = (value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+    const trimmedValue = value.trim();
+    const match = trimmedValue.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (match) {
+      const [, year, month, day] = match;
+      const paddedDay = day.padStart(2, "0");
+      const paddedMonth = month.padStart(2, "0");
+      return `${paddedDay}.${paddedMonth}.${year}`;
+    }
+    return trimmedValue;
+  };
+
   function MemberDetailPanel({ member, onClose }) {
     const hasSelection = Boolean(member);
     const { avatar, fallbackAvatar, customAvatar, isDeceased } = hasSelection
@@ -23,6 +38,7 @@
       : emptyAvatarAssets;
     const address = member?.attributes?.address || "";
     const dateOfBirth = member?.attributes?.dateOfBirth || "";
+    const formattedDateOfBirth = formatDateOfBirth(dateOfBirth);
     const otherAttributes = hasSelection
       ? Object.entries(member.attributes || {}).filter(
           ([key]) =>
@@ -133,7 +149,7 @@
                     Date of Birth
                   </Typography>
                   <Typography variant="body2" sx={{ mt: 0.5 }}>
-                    {dateOfBirth}
+                    {formattedDateOfBirth}
                   </Typography>
                 </Box>
               )}
