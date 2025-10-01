@@ -54,6 +54,10 @@
 
   const { MemberDetailPanel } = namespace;
 
+  function clamp(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+  }
+
   function createParentChildHierarchy(relationships, memberById) {
     if (!Array.isArray(relationships) || !relationships.length || !memberById) {
       return [];
@@ -245,12 +249,187 @@
 
   const [graphView, setGraphView] = React.useState("network");
 
+  const hierarchyContainerRef = React.useRef(null);
+  const hierarchyContentRef = React.useRef(null);
+  const hierarchyPointerRef = React.useRef({
+    pointerId: null,
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0,
+  });
+  const [isHierarchyDragging, setHierarchyDragging] = React.useState(false);
+  const [hierarchyTransform, setHierarchyTransform] = React.useState(() => ({
+    scale: 1,
+    x: 0,
+    y: 0,
+  }));
+  const hierarchyTransformRef = React.useRef(hierarchyTransform);
+
+  React.useEffect(() => {
+    hierarchyTransformRef.current = hierarchyTransform;
+  }, [hierarchyTransform]);
+
   const graphHierarchy = React.useMemo(
     () => createParentChildHierarchy(relationships, memberById),
     [relationships, memberById]
   );
 
   const selectedMemberId = selectedMember?.id ?? null;
+
+  React.useEffect(() => {
+    if (graphView !== "hierarchy") {
+      return;
+    }
+    const container = hierarchyContainerRef.current;
+    const content = hierarchyContentRef.current;
+    hierarchyPointerRef.current.isDragging = false;
+    hierarchyPointerRef.current.pointerId = null;
+    setHierarchyDragging(false);
+    setHierarchyTransform((prev) => ({ ...prev, scale: 1, x: 24, y: 24 }));
+    if (!container || !content) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const containerWidth = container.clientWidth || 1;
+      const containerHeight = container.clientHeight || 1;
+      const contentWidth = content.offsetWidth || 1;
+      const contentHeight = content.offsetHeight || 1;
+      const centeredX =
+        contentWidth < containerWidth
+          ? (containerWidth - contentWidth) / 2
+          : 24;
+      const centeredY =
+        contentHeight < containerHeight
+          ? Math.max((containerHeight - contentHeight) / 2, 24)
+          : 24;
+      setHierarchyTransform((prev) => ({
+        ...prev,
+        scale: 1,
+        x: Math.max(centeredX, 24),
+        y: Math.max(centeredY, 24),
+      }));
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [graphHierarchy, graphView]);
+
+  const handleHierarchyPointerDown = React.useCallback(
+    (event) => {
+      if (graphView !== "hierarchy") {
+        return;
+      }
+      if (event.target.closest(".graph-hierarchy-node")) {
+        return;
+      }
+      if (event.button !== 0 && event.pointerType !== "touch") {
+        return;
+      }
+      const container = hierarchyContainerRef.current;
+      if (!container) {
+        return;
+      }
+      hierarchyPointerRef.current.pointerId = event.pointerId;
+      hierarchyPointerRef.current.isDragging = true;
+      hierarchyPointerRef.current.startX = event.clientX;
+      hierarchyPointerRef.current.startY = event.clientY;
+      hierarchyPointerRef.current.originX = hierarchyTransformRef.current.x;
+      hierarchyPointerRef.current.originY = hierarchyTransformRef.current.y;
+      setHierarchyDragging(true);
+      container.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    },
+    [graphView]
+  );
+
+  const stopHierarchyDrag = React.useCallback((event) => {
+    if (
+      hierarchyPointerRef.current.pointerId !== null &&
+      event.pointerId !== hierarchyPointerRef.current.pointerId
+    ) {
+      return;
+    }
+    hierarchyPointerRef.current.isDragging = false;
+    hierarchyPointerRef.current.pointerId = null;
+    setHierarchyDragging(false);
+  }, []);
+
+  const handleHierarchyPointerMove = React.useCallback(
+    (event) => {
+      if (graphView !== "hierarchy") {
+        return;
+      }
+      const pointerState = hierarchyPointerRef.current;
+      if (!pointerState.isDragging || pointerState.pointerId !== event.pointerId) {
+        return;
+      }
+      const deltaX = event.clientX - pointerState.startX;
+      const deltaY = event.clientY - pointerState.startY;
+      setHierarchyTransform((prev) => ({
+        ...prev,
+        x: pointerState.originX + deltaX,
+        y: pointerState.originY + deltaY,
+      }));
+      event.preventDefault();
+    },
+    [graphView]
+  );
+
+  const handleHierarchyPointerUp = React.useCallback(
+    (event) => {
+      if (graphView !== "hierarchy") {
+        return;
+      }
+      const container = hierarchyContainerRef.current;
+      if (container && container.hasPointerCapture(event.pointerId)) {
+        container.releasePointerCapture(event.pointerId);
+      }
+      stopHierarchyDrag(event);
+    },
+    [graphView, stopHierarchyDrag]
+  );
+
+  const handleHierarchyWheel = React.useCallback(
+    (event) => {
+      if (graphView !== "hierarchy") {
+        return;
+      }
+      const container = hierarchyContainerRef.current;
+      if (!container) {
+        return;
+      }
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        const rect = container.getBoundingClientRect();
+        const pointX = event.clientX - rect.left;
+        const pointY = event.clientY - rect.top;
+        const scaleFactor = Math.exp(-event.deltaY / 520);
+        setHierarchyTransform((prev) => {
+          const nextScale = clamp(prev.scale * scaleFactor, 0.55, 2.6);
+          const ratio = nextScale / prev.scale;
+          const nextX = pointX - ratio * (pointX - prev.x);
+          const nextY = pointY - ratio * (pointY - prev.y);
+          return {
+            scale: nextScale,
+            x: nextX,
+            y: nextY,
+          };
+        });
+        return;
+      }
+      event.preventDefault();
+      setHierarchyTransform((prev) => ({
+        ...prev,
+        x: prev.x - event.deltaX,
+        y: prev.y - event.deltaY,
+      }));
+    },
+    [graphView]
+  );
+
+  const handleHierarchyDoubleClick = React.useCallback(() => {
+    setHierarchyTransform({ scale: 1, x: 24, y: 24 });
+  }, []);
 
   const handleSelectHierarchyMember = React.useCallback(
     (memberId) => {
@@ -1319,7 +1498,19 @@
                               Drag sideways or downward to explore branches. Select a person to open their story panel.
                             </Typography>
                           </Box>
-                          <Box className="graph-hierarchy-scroll">
+                          <Box
+                            ref={hierarchyContainerRef}
+                            className={`graph-hierarchy-scroll${
+                              isHierarchyDragging ? " is-dragging" : ""
+                            }`}
+                            onPointerDown={handleHierarchyPointerDown}
+                            onPointerMove={handleHierarchyPointerMove}
+                            onPointerUp={handleHierarchyPointerUp}
+                            onPointerCancel={handleHierarchyPointerUp}
+                            onPointerLeave={handleHierarchyPointerUp}
+                            onWheel={handleHierarchyWheel}
+                            onDoubleClick={handleHierarchyDoubleClick}
+                          >
                             {graphHierarchy.length === 0 ? (
                               <Box
                                 sx={{
@@ -1336,12 +1527,20 @@
                                 </Typography>
                               </Box>
                             ) : (
-                              <Box className="graph-hierarchy-root-list">
-                                {graphHierarchy.map((root) => (
-                                  <ul key={`hierarchy-root-${root.id}`} className="graph-hierarchy-tree">
-                                    {renderGraphHierarchyBranch(root, true)}
-                                  </ul>
-                                ))}
+                              <Box
+                                ref={hierarchyContentRef}
+                                className="graph-hierarchy-canvas"
+                                sx={{
+                                  transform: `translate3d(${hierarchyTransform.x}px, ${hierarchyTransform.y}px, 0) scale(${hierarchyTransform.scale})`,
+                                }}
+                              >
+                                <Box className="graph-hierarchy-root-list">
+                                  {graphHierarchy.map((root) => (
+                                    <ul key={`hierarchy-root-${root.id}`} className="graph-hierarchy-tree">
+                                      {renderGraphHierarchyBranch(root, true)}
+                                    </ul>
+                                  ))}
+                                </Box>
                               </Box>
                             )}
                           </Box>
