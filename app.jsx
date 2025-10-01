@@ -538,7 +538,7 @@ function App() {
   const [relationships, setRelationships] = React.useState(
     initialData.relationships
   );
-  const [tab, setTab] = React.useState("graph");
+  const [tab, setTab] = React.useState("overview");
   const [graphExpanded, setGraphExpanded] = React.useState(false);
 
   const [memberName, setMemberName] = React.useState("");
@@ -722,6 +722,125 @@ function App() {
         : "Child",
     [relationshipType]
   );
+
+  const overviewStats = React.useMemo(() => {
+    const totals = {
+      totalMembers: members.length,
+      totalRelationships: relationships.length,
+      livingCount: 0,
+      deceasedCount: 0,
+      genderCounts: { female: 0, male: 0 },
+    };
+    const relationshipTypeCounts = { parent: 0, spouse: 0, divorced: 0 };
+    const childCounts = new Map();
+    const spouseCounts = new Map();
+
+    members.forEach((member) => {
+      const lifeStatus =
+        member.attributes?.lifeStatus === "Deceased" ? "Deceased" : "Alive";
+      if (lifeStatus === "Deceased") {
+        totals.deceasedCount += 1;
+      } else {
+        totals.livingCount += 1;
+      }
+      if (member.gender === "male") {
+        totals.genderCounts.male += 1;
+      } else {
+        totals.genderCounts.female += 1;
+      }
+    });
+
+    relationships.forEach((relationship) => {
+      if (relationship.type === "parent") {
+        relationshipTypeCounts.parent += 1;
+        childCounts.set(
+          relationship.from,
+          (childCounts.get(relationship.from) || 0) + 1
+        );
+      } else if (relationship.type === "spouse") {
+        relationshipTypeCounts.spouse += 1;
+        spouseCounts.set(
+          relationship.from,
+          (spouseCounts.get(relationship.from) || 0) + 1
+        );
+        spouseCounts.set(
+          relationship.to,
+          (spouseCounts.get(relationship.to) || 0) + 1
+        );
+      } else if (relationship.type === "divorced") {
+        relationshipTypeCounts.divorced += 1;
+      } else {
+        relationshipTypeCounts[relationship.type] =
+          (relationshipTypeCounts[relationship.type] || 0) + 1;
+      }
+    });
+
+    let totalChildren = 0;
+    childCounts.forEach((count) => {
+      totalChildren += count;
+    });
+    const parentCount = childCounts.size;
+    const averageChildren = parentCount ? totalChildren / parentCount : 0;
+
+    let topParentId = null;
+    let topParentCount = 0;
+    childCounts.forEach((count, id) => {
+      if (count > topParentCount) {
+        topParentCount = count;
+        topParentId = id;
+      }
+    });
+
+    let topSpouseId = null;
+    let topSpouseCount = 0;
+    spouseCounts.forEach((count, id) => {
+      if (count > topSpouseCount) {
+        topSpouseCount = count;
+        topSpouseId = id;
+      }
+    });
+
+    const births = { youngest: null, oldest: null };
+    members.forEach((member) => {
+      const dateString = member.attributes?.dateOfBirth;
+      if (!dateString) {
+        return;
+      }
+      const timestamp = Date.parse(dateString);
+      if (Number.isNaN(timestamp)) {
+        return;
+      }
+      if (!births.youngest || timestamp > births.youngest.timestamp) {
+        births.youngest = { member, timestamp, date: dateString };
+      }
+      if (!births.oldest || timestamp < births.oldest.timestamp) {
+        births.oldest = { member, timestamp, date: dateString };
+      }
+    });
+
+    return {
+      totals,
+      relationshipTypeCounts,
+      averageChildren,
+      parentCount,
+      topParent:
+        topParentId != null
+          ? { member: memberById.get(topParentId) || null, count: topParentCount }
+          : null,
+      topSpouse:
+        topSpouseId != null
+          ? { member: memberById.get(topSpouseId) || null, count: topSpouseCount }
+          : null,
+      births: {
+        youngest: births.youngest
+          ? { member: births.youngest.member, date: births.youngest.date }
+          : null,
+        oldest: births.oldest
+          ? { member: births.oldest.member, date: births.oldest.date }
+          : null,
+      },
+    };
+  }, [members, relationships, memberById]);
 
   const firstPersonValue = React.useMemo(
     () =>
@@ -1117,6 +1236,7 @@ function App() {
           relationships,
           memberById,
         }}
+        overview={overviewStats}
         alert={{ message: alertMessage, onClose: handleCloseAlert }}
       />
     </ThemeProvider>

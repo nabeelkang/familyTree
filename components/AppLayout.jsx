@@ -52,19 +52,20 @@
   const { MemberDetailPanel } = namespace;
 
   function AppLayout({
-  tabState,
-  graphState,
-  network,
-  memberDetail,
-  memberForm,
-  relationshipForm,
-  storageActions,
-  memberSearchState,
-  memberTable,
-  relationshipSearchState,
-  relationshipTable,
-  alert,
-}) {
+    tabState,
+    graphState,
+    network,
+    memberDetail,
+    memberForm,
+    relationshipForm,
+    storageActions,
+    memberSearchState,
+    memberTable,
+    relationshipSearchState,
+    relationshipTable,
+    overview,
+    alert,
+  }) {
   const { value: tab, onChange: onTabChange } = tabState;
   const { expanded: graphExpanded, onToggle: onToggleGraphExpanded } = graphState;
   const { containerRef } = network;
@@ -133,19 +134,34 @@
 
   const { message: alertMessage, onClose: onCloseAlert } = alert;
 
-  const tabHeading =
-    tab === "graph"
-      ? "Family Graph"
-      : tab === "members"
-      ? "Members Directory"
-      : "Relationship Ledger";
+  const overviewData = overview || {};
+  const totals = overviewData.totals || {};
+  const relationshipTypeCounts = overviewData.relationshipTypeCounts || {};
+  const averageChildren = overviewData.averageChildren ?? 0;
+  const parentCount = overviewData.parentCount ?? 0;
+  const topParentStat = overviewData.topParent || null;
+  const topSpouseStat = overviewData.topSpouse || null;
+  const births = overviewData.births || {};
 
-  const tabDescription =
-    tab === "graph"
-      ? "Explore the family network and tap on people to view their story."
-      : tab === "members"
-      ? "Manage profiles, addresses, custom attributes, and portrait photos."
-      : "Review how everyone is connected across the family tree.";
+  let tabHeading = "";
+  let tabDescription = "";
+  if (tab === "overview") {
+    tabHeading = "Family Snapshot";
+    tabDescription =
+      "See quick insights about your family, from member counts to standout storytellers.";
+  } else if (tab === "graph") {
+    tabHeading = "Family Graph";
+    tabDescription =
+      "Explore the family network and tap on people to view their story.";
+  } else if (tab === "members") {
+    tabHeading = "Members Directory";
+    tabDescription =
+      "Manage profiles, addresses, custom attributes, and portrait photos.";
+  } else {
+    tabHeading = "Relationship Ledger";
+    tabDescription =
+      "Review how everyone is connected across the family tree.";
+  }
 
   const renderMemberOption = React.useCallback((props, option) => (
     <li {...props}>
@@ -305,10 +321,11 @@
               },
             }}
           >
-            <Tab value="graph" label="Graph" />
-            <Tab value="members" label="Members" />
-            <Tab value="relationships" label="Relationships" />
-          </Tabs>
+          <Tab value="overview" label="Overview" />
+          <Tab value="graph" label="Graph" />
+          <Tab value="members" label="Members" />
+          <Tab value="relationships" label="Relationships" />
+        </Tabs>
         </Toolbar>
       </AppBar>
 
@@ -322,7 +339,7 @@
         }}
       >
         <Grid container spacing={4} alignItems="stretch">
-          {!graphExpanded && (
+          {!graphExpanded && tab !== "overview" && (
             <Grid item xs={12} md={4} lg={3}>
               <Stack spacing={3}>
                 <Card elevation={2}>
@@ -638,8 +655,8 @@
           <Grid
             item
             xs={12}
-            md={graphExpanded ? 12 : 8}
-            lg={graphExpanded ? 12 : 9}
+            md={tab === "overview" || graphExpanded ? 12 : 8}
+            lg={tab === "overview" || graphExpanded ? 12 : 9}
           >
             <Card elevation={2} sx={{ height: "100%" }}>
               <CardContent sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -679,6 +696,291 @@
                     </Button>
                   )}
                 </Stack>
+
+                {tab === "overview" && (
+                  <Stack spacing={3} sx={{ flexGrow: 1 }}>
+                    <Grid container spacing={2.5}>
+                      <Grid item xs={12} sm={6} lg={3}>
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            p: 3,
+                            borderRadius: 3,
+                            bgcolor: "rgba(79, 70, 229, 0.08)",
+                            height: "100%",
+                          }}
+                        >
+                          <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+                            Family Members
+                          </Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 600 }}>
+                            {totals.totalMembers ?? 0}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {(totals.livingCount ?? 0).toLocaleString()} living •{' '}
+                            {(totals.deceasedCount ?? 0).toLocaleString()} deceased
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} sm={6} lg={3}>
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            p: 3,
+                            borderRadius: 3,
+                            bgcolor: "rgba(14, 165, 233, 0.08)",
+                            height: "100%",
+                          }}
+                        >
+                          <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+                            Connections
+                          </Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 600 }}>
+                            {totals.totalRelationships ?? 0}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {(relationshipTypeCounts.parent ?? 0).toLocaleString()} parent-child •{' '}
+                            {(relationshipTypeCounts.spouse ?? 0).toLocaleString()} spouses •{' '}
+                            {(relationshipTypeCounts.divorced ?? 0).toLocaleString()} divorced
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} sm={6} lg={3}>
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            p: 3,
+                            borderRadius: 3,
+                            bgcolor: "rgba(16, 185, 129, 0.08)",
+                            height: "100%",
+                          }}
+                        >
+                          <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+                            Growing Branches
+                          </Typography>
+                          <Typography variant="h3" sx={{ fontWeight: 600 }}>
+                            {averageChildren > 0
+                              ? averageChildren.toFixed(1)
+                              : "0.0"}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {parentCount > 0
+                              ? `Across ${parentCount} ${parentCount === 1 ? "parent" : "parents"}`
+                              : "Add parent-child links to grow the tree."}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} sm={6} lg={3}>
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            p: 3,
+                            borderRadius: 3,
+                            bgcolor: "rgba(251, 191, 36, 0.12)",
+                            height: "100%",
+                          }}
+                        >
+                          <Typography variant="overline" sx={{ letterSpacing: 1 }}>
+                            Family Makeup
+                          </Typography>
+                          <Typography variant="h4" sx={{ fontWeight: 600 }}>
+                            {(totals.genderCounts?.female ?? 0) + (totals.genderCounts?.male ?? 0)
+                              ? `${totals.genderCounts?.female ?? 0}♀ / ${totals.genderCounts?.male ?? 0}♂`
+                              : 'No gender data yet'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {(() => {
+                              const female = totals.genderCounts?.female ?? 0;
+                              const male = totals.genderCounts?.male ?? 0;
+                              const other = Math.max(
+                                0,
+                                (totals.totalMembers ?? 0) - female - male
+                              );
+                              if ((totals.totalMembers ?? 0) === 0) {
+                                return "Add members to track gender insights.";
+                              }
+                              const parts = [];
+                              parts.push(`${female.toLocaleString()} female`);
+                              parts.push(`${male.toLocaleString()} male`);
+                              if (other > 0) {
+                                parts.push(`${other.toLocaleString()} other`);
+                              }
+                              return parts.join(" • ");
+                            })()}
+                          </Typography>
+                        </Paper>
+                      </Grid>
+                    </Grid>
+
+                    <Grid container spacing={2.5}>
+                      <Grid item xs={12} md={6}>
+                        <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, height: "100%" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            Standout Storytellers
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            See who is raising the next generation and forming new branches.
+                          </Typography>
+                          <Stack spacing={2.5} sx={{ mt: 3 }}>
+                            {(() => {
+                              if (!topParentStat || !topParentStat.member) {
+                                return (
+                                  <Typography variant="body2" color="text.disabled">
+                                    Add parent-child relationships to surface family leaders.
+                                  </Typography>
+                                );
+                              }
+                              const assets = getMemberAvatarAssets(topParentStat.member);
+                              const countLabel = `${topParentStat.count} ${
+                                topParentStat.count === 1 ? "child" : "children"
+                              } recorded`;
+                              return (
+                                <Stack direction="row" spacing={2} alignItems="center">
+                                  <Avatar
+                                    src={assets.avatar || undefined}
+                                    alt={topParentStat.member.label}
+                                    imgProps={
+                                      assets.customAvatar && assets.fallbackAvatar
+                                        ? {
+                                            onError: (event) => {
+                                              event.target.onerror = null;
+                                              event.target.src = assets.fallbackAvatar;
+                                            },
+                                          }
+                                        : undefined
+                                    }
+                                    sx={{ width: 56, height: 56, boxShadow: 3 }}
+                                  >
+                                    {!assets.avatar &&
+                                      topParentStat.member.label.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                  <Box>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Most Children
+                                    </Typography>
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                      {topParentStat.member.label}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                      {countLabel}
+                                    </Typography>
+                                  </Box>
+                                </Stack>
+                              );
+                            })()}
+                            <Divider flexItem />
+                            {(() => {
+                              if (!topSpouseStat || !topSpouseStat.member || topSpouseStat.count === 0) {
+                                return (
+                                  <Typography variant="body2" color="text.disabled">
+                                    Record spouse relationships to spotlight partnerships.
+                                  </Typography>
+                                );
+                              }
+                              const assets = getMemberAvatarAssets(topSpouseStat.member);
+                              const countLabel = `${topSpouseStat.count} ${
+                                topSpouseStat.count === 1 ? "spouse" : "spouses"
+                              } connected`;
+                              return (
+                                <Stack direction="row" spacing={2} alignItems="center">
+                                  <Avatar
+                                    src={assets.avatar || undefined}
+                                    alt={topSpouseStat.member.label}
+                                    imgProps={
+                                      assets.customAvatar && assets.fallbackAvatar
+                                        ? {
+                                            onError: (event) => {
+                                              event.target.onerror = null;
+                                              event.target.src = assets.fallbackAvatar;
+                                            },
+                                          }
+                                        : undefined
+                                    }
+                                    sx={{ width: 56, height: 56, boxShadow: 3 }}
+                                  >
+                                    {!assets.avatar &&
+                                      topSpouseStat.member.label.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                  <Box>
+                                    <Typography variant="body2" color="text.secondary">
+                                      Most Spouse Connections
+                                    </Typography>
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                      {topSpouseStat.member.label}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary">
+                                      {countLabel}
+                                    </Typography>
+                                  </Box>
+                                </Stack>
+                              );
+                            })()}
+                          </Stack>
+                        </Paper>
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, height: "100%" }}>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                            Timeline Highlights
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                            Birthdates reveal the youngest and most seasoned family members.
+                          </Typography>
+                          {(() => {
+                            const hasBirthInsights = Boolean(
+                              (births.youngest && births.youngest.member) ||
+                                (births.oldest && births.oldest.member)
+                            );
+                            if (!hasBirthInsights) {
+                              return (
+                                <Typography
+                                  variant="body2"
+                                  color="text.disabled"
+                                  sx={{ mt: 3 }}
+                                >
+                                  Add birthdates to members to unlock timeline insights.
+                                </Typography>
+                              );
+                            }
+                            const renderBirthRow = (label, record) => {
+                              if (!record || !record.member) {
+                                return (
+                                  <Box>
+                                    <Typography variant="body2" color="text.secondary">
+                                      {label}
+                                    </Typography>
+                                    <Typography variant="body2" color="text.disabled">
+                                      No date recorded yet.
+                                    </Typography>
+                                  </Box>
+                                );
+                              }
+                              return (
+                                <Box>
+                                  <Typography variant="body2" color="text.secondary">
+                                    {label}
+                                  </Typography>
+                                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                                    {record.member.label}
+                                  </Typography>
+                                  <Typography variant="body2" color="text.secondary">
+                                    Born {record.date}
+                                  </Typography>
+                                </Box>
+                              );
+                            };
+                            return (
+                              <Stack spacing={2.5} divider={<Divider flexItem />} sx={{ mt: 3 }}>
+                                {renderBirthRow("Youngest Member", births.youngest)}
+                                {renderBirthRow("Oldest Member", births.oldest)}
+                              </Stack>
+                            );
+                          })()}
+                        </Paper>
+                      </Grid>
+                    </Grid>
+                  </Stack>
+                )}
 
                 {tab === "graph" && (
                   <Box
