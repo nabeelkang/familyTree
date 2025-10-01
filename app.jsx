@@ -2,9 +2,10 @@ const { AppLayout } = window.FamilyTreeComponents;
 
 const NODE_RADIUS = 40;
 const ARROW_TARGET_PADDING = 6;
+const LINK_TYPES_WITH_ARROW = new Set(["parent", "spouse", "divorced"]);
 
 function getLinkTargetPoint(link) {
-  if (link.type !== "parent") {
+  if (!LINK_TYPES_WITH_ARROW.has(link.type)) {
     return { x: link.target.x, y: link.target.y };
   }
   const dx = link.target.x - link.source.x;
@@ -156,21 +157,27 @@ function useNetwork(
       .attr("cy", 0.5)
       .attr("r", 0.5);
 
-    defs
-      .append("marker")
-      .attr("id", "arrow-parent")
-      .attr("viewBox", "0 0 18 18")
-      .attr("refX", 16)
-      .attr("refY", 9)
-      .attr("markerWidth", 5.4)
-      .attr("markerHeight", 5.4)
-      .attr("orient", "auto")
-      .attr("markerUnits", "strokeWidth")
-      .append("path")
-      .attr("d", "M3,2 L16,9 L3,16 L7.5,9 Z")
-      .attr("fill", "#10b981")
-      .attr("stroke", "#065f46")
-      .attr("stroke-width", 0.45);
+    const createArrowMarker = (id, { fill, stroke }) => {
+      defs
+        .append("marker")
+        .attr("id", id)
+        .attr("viewBox", "0 0 18 18")
+        .attr("refX", 16)
+        .attr("refY", 9)
+        .attr("markerWidth", 5.4)
+        .attr("markerHeight", 5.4)
+        .attr("orient", "auto")
+        .attr("markerUnits", "strokeWidth")
+        .append("path")
+        .attr("d", "M3,2 L16,9 L3,16 L7.5,9 Z")
+        .attr("fill", fill)
+        .attr("stroke", stroke)
+        .attr("stroke-width", 0.45);
+    };
+
+    createArrowMarker("arrow-parent", { fill: "#10b981", stroke: "#065f46" });
+    createArrowMarker("arrow-spouse", { fill: "#ef4444", stroke: "#991b1b" });
+    createArrowMarker("arrow-divorced", { fill: "#9ca3af", stroke: "#4b5563" });
 
     const zoomGroup = svg.append("g").attr("class", "network-zoom");
     const linkGroup = zoomGroup.append("g").attr("class", "network-links");
@@ -299,9 +306,18 @@ function useNetwork(
       .attr("stroke", (d) => d.color)
       .attr("stroke-dasharray", (d) => d.dashArray || null)
       .attr("opacity", (d) => (d.type === "divorced" ? 0.85 : 1))
-      .attr("marker-end", (d) =>
-        d.type === "parent" ? "url(#arrow-parent)" : null
-      );
+      .attr("marker-end", (d) => {
+        if (d.type === "parent") {
+          return "url(#arrow-parent)";
+        }
+        if (d.type === "spouse") {
+          return "url(#arrow-spouse)";
+        }
+        if (d.type === "divorced") {
+          return "url(#arrow-divorced)";
+        }
+        return null;
+      });
 
     const labelsData = links.filter((link) => Boolean(link.labelText));
     const labelSelection = state.labelGroup
