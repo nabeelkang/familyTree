@@ -34,7 +34,10 @@
     relationships,
     { onSelectMember, selectedMemberId } = {}
   ) {
-    const containerRef = React.useRef(null);
+    const [containerNode, setContainerNode] = React.useState(null);
+    const containerRef = React.useCallback((node) => {
+      setContainerNode(node);
+    }, []);
     const stateRef = React.useRef(null);
     const simulationRef = React.useRef(null);
     const selectCallbackRef = React.useRef(onSelectMember);
@@ -122,7 +125,6 @@
     }, []);
 
     React.useEffect(() => {
-      const containerNode = containerRef.current;
       if (!containerNode || !d3) {
         return undefined;
       }
@@ -244,7 +246,7 @@
           simulationRef.current = null;
         }
       };
-    }, [fitNetwork]);
+    }, [containerNode, fitNetwork]);
 
     React.useEffect(() => {
       const state = stateRef.current;
