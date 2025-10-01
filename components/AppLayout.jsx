@@ -12,39 +12,41 @@
     SearchIcon,
   } = global.FamilyTreeIcons;
   const {
-  AppBar,
-  Toolbar,
-  Typography,
-  Container,
-  Box,
-  Grid,
-  Card,
-  CardContent,
-  Stack,
-  TextField,
-  InputAdornment,
-  Button,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
-  Tabs,
-  Tab,
-  Autocomplete,
-  Divider,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Chip,
-  IconButton,
-  Tooltip,
-  ButtonGroup,
-  Avatar,
-  Paper,
-  Alert,
-} = global.MaterialUI;
+    AppBar,
+    Toolbar,
+    Typography,
+    Container,
+    Box,
+    Grid,
+    Card,
+    CardContent,
+    Stack,
+    TextField,
+    InputAdornment,
+    Button,
+    MenuItem,
+    FormControl,
+    InputLabel,
+    Select,
+    Tabs,
+    Tab,
+    Autocomplete,
+    Divider,
+    Table,
+    TableHead,
+    TableRow,
+    TableCell,
+    TableBody,
+    Chip,
+    IconButton,
+    Tooltip,
+    ButtonGroup,
+    ToggleButtonGroup,
+    ToggleButton,
+    Avatar,
+    Paper,
+    Alert,
+  } = global.MaterialUI;
 
   const { logoDataUri, createAvatar, getMemberAvatarAssets } =
     global.FamilyTreeData;
@@ -142,6 +144,185 @@
   const topParentStat = overviewData.topParent || null;
   const topSpouseStat = overviewData.topSpouse || null;
   const births = overviewData.births || {};
+
+  const [relationshipView, setRelationshipView] = React.useState("table");
+
+  const relationshipHierarchy = React.useMemo(() => {
+    const parentRelationships = relationships.filter(
+      (relationship) => relationship.type === "parent"
+    );
+    if (parentRelationships.length === 0) {
+      return [];
+    }
+
+    const childrenByParent = new Map();
+    const parentsByChild = new Map();
+
+    parentRelationships.forEach((relationship) => {
+      const parentId = Number(relationship.from);
+      const childId = Number(relationship.to);
+      if (!Number.isFinite(parentId) || !Number.isFinite(childId)) {
+        return;
+      }
+
+      if (!childrenByParent.has(parentId)) {
+        childrenByParent.set(parentId, new Set());
+      }
+      childrenByParent.get(parentId).add(childId);
+
+      if (!parentsByChild.has(childId)) {
+        parentsByChild.set(childId, new Set());
+      }
+      parentsByChild.get(childId).add(parentId);
+    });
+
+    const buildNode = (rawMemberId, visited) => {
+      const memberId = Number(rawMemberId);
+      if (!Number.isFinite(memberId) || visited.has(memberId)) {
+        return null;
+      }
+      const member = memberById.get(memberId);
+      if (!member) {
+        return null;
+      }
+
+      const nextVisited = new Set(visited);
+      nextVisited.add(memberId);
+
+      const childIds = Array.from(childrenByParent.get(memberId) || []);
+      const children = childIds
+        .map((childId) => buildNode(childId, nextVisited))
+        .filter(Boolean);
+
+      return { id: memberId, member, children, matches: false };
+    };
+
+    const rootCandidates = Array.from(childrenByParent.keys()).filter(
+      (memberId) => !parentsByChild.has(memberId)
+    );
+    const rootIds =
+      rootCandidates.length > 0
+        ? rootCandidates
+        : Array.from(childrenByParent.keys());
+
+    const visitedRoots = new Set();
+    const hierarchy = [];
+
+    rootIds.forEach((rootId) => {
+      if (visitedRoots.has(rootId)) {
+        return;
+      }
+      const node = buildNode(rootId, new Set());
+      if (!node) {
+        return;
+      }
+      const markVisited = (current) => {
+        visitedRoots.add(current.id);
+        current.children.forEach((child) => markVisited(child));
+      };
+      markVisited(node);
+      hierarchy.push(node);
+    });
+
+    return hierarchy;
+  }, [relationships, memberById]);
+
+  const filteredHierarchy = React.useMemo(() => {
+    const query = relationshipSearch.trim().toLowerCase();
+    if (!query) {
+      return relationshipHierarchy;
+    }
+
+    const filterNode = (node) => {
+      const label = node.member?.label || "";
+      const matches = label.toLowerCase().includes(query);
+      const children = node.children
+        .map((child) => filterNode(child))
+        .filter(Boolean);
+      if (matches || children.length > 0) {
+        return { ...node, matches, children };
+      }
+      return null;
+    };
+
+    return relationshipHierarchy.map(filterNode).filter(Boolean);
+  }, [relationshipHierarchy, relationshipSearch]);
+
+  function renderHierarchyNode(node, depth = 0) {
+    if (!node || !node.member) {
+      return null;
+    }
+    const assets = getMemberAvatarAssets(node.member);
+    const avatarSource = assets.avatar || undefined;
+    const fallbackHandler =
+      assets.customAvatar && assets.fallbackAvatar
+        ? {
+            onError: (event) => {
+              event.target.onerror = null;
+              event.target.src = assets.fallbackAvatar;
+            },
+          }
+        : undefined;
+    const isMatch = Boolean(node.matches);
+    const hasChildren = node.children.length > 0;
+
+    return (
+      <Box
+        key={`${node.id}-${depth}`}
+        sx={{
+          position: "relative",
+          pl: depth === 0 ? 0 : 2.5,
+          ml: depth === 0 ? 0 : 1.5,
+          borderLeft:
+            depth === 0 ? "none" : "1px dashed rgba(79, 70, 229, 0.35)",
+        }}
+      >
+        <Stack
+          direction="row"
+          spacing={1.5}
+          alignItems="center"
+          sx={{
+            py: 0.75,
+            px: 1,
+            borderRadius: 2,
+            bgcolor: isMatch ? "rgba(79, 70, 229, 0.12)" : "transparent",
+          }}
+        >
+          <Avatar
+            src={avatarSource}
+            alt={node.member.label}
+            imgProps={fallbackHandler}
+            sx={{
+              width: 36,
+              height: 36,
+              fontSize: 14,
+              boxShadow: hasChildren
+                ? "0 0 0 3px rgba(79, 70, 229, 0.22)"
+                : "0 0 0 3px rgba(14, 165, 233, 0.2)",
+            }}
+          >
+            {!avatarSource && node.member.label.charAt(0).toUpperCase()}
+          </Avatar>
+          <Box>
+            <Typography sx={{ fontWeight: isMatch ? 700 : 600 }}>
+              {node.member.label}
+            </Typography>
+            {hasChildren ? (
+              <Typography variant="caption" color="text.secondary">
+                Parent of {node.children.length}{" "}
+                {node.children.length === 1 ? "child" : "children"}
+              </Typography>
+            ) : node.member.attributes?.lifeStatus ? (
+              <Typography variant="caption" color="text.secondary">
+                {node.member.attributes.lifeStatus}
+              </Typography>
+            ) : null}
+          </Box>
+        </Stack>
+        {node.children.map((child) => renderHierarchyNode(child, depth + 1))}
+      </Box>
+    );
+  }
 
   let tabHeading = "";
   let tabDescription = "";
@@ -1379,7 +1560,7 @@
                           onRelationshipSearchChange(event.target.value)
                         }
                         size="small"
-                        placeholder="Search relationships…"
+                        placeholder="Search relationships or names…"
                         type="search"
                         InputProps={{
                           startAdornment: (
@@ -1390,92 +1571,133 @@
                         }}
                         sx={{ minWidth: { xs: "100%", sm: 260 }, maxWidth: 360 }}
                       />
+                      <ToggleButtonGroup
+                        value={relationshipView}
+                        exclusive
+                        color="primary"
+                        size="small"
+                        onChange={(event, value) => {
+                          if (value) {
+                            setRelationshipView(value);
+                          }
+                        }}
+                        sx={{
+                          ml: { xs: 0, md: "auto" },
+                          borderRadius: 9999,
+                          '& .MuiToggleButton-root': {
+                            textTransform: "none",
+                            fontWeight: 500,
+                            px: 2.25,
+                          },
+                        }}
+                      >
+                        <ToggleButton value="table">Table</ToggleButton>
+                        <ToggleButton value="hierarchy">Hierarchy</ToggleButton>
+                      </ToggleButtonGroup>
                     </Box>
-                    <Table size="medium">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Type</TableCell>
-                          <TableCell>From</TableCell>
-                          <TableCell>To</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {relationshipRows.length === 0 && (
+                    {relationshipView === "table" ? (
+                      <Table size="medium">
+                        <TableHead>
                           <TableRow>
-                            <TableCell colSpan={3}>
-                              <Typography align="center" color="text.secondary">
-                                {relationships.length === 0
-                                  ? "No relationships yet. Create one to connect your members."
-                                  : "No relationships match your search."}
-                              </Typography>
-                            </TableCell>
+                            <TableCell>Type</TableCell>
+                            <TableCell>From</TableCell>
+                            <TableCell>To</TableCell>
                           </TableRow>
-                        )}
-                        {relationshipRows.map((relationship) => {
-                          const fromMember = memberById.get(relationship.from) || null;
-                          const toMember = memberById.get(relationship.to) || null;
-                          const fromAssets = getMemberAvatarAssets(fromMember);
-                          const toAssets = getMemberAvatarAssets(toMember);
-                          const fromName = fromMember?.label || "Unknown";
-                          const toName = toMember?.label || "Unknown";
-                          return (
-                            <TableRow key={relationship.id}>
-                              <TableCell>
-                                {relationship.type === "spouse"
-                                  ? "Spouses"
-                                  : relationship.type === "divorced"
-                                  ? "Divorced"
-                                  : "Parent → Child"}
-                              </TableCell>
-                              <TableCell>
-                                <Stack direction="row" spacing={1.5} alignItems="center">
-                                  <Avatar
-                                    src={fromAssets.avatar || undefined}
-                                    alt={fromName}
-                                    imgProps={
-                                      fromAssets.customAvatar && fromAssets.fallbackAvatar
-                                        ? {
-                                            onError: (event) => {
-                                              event.target.onerror = null;
-                                              event.target.src = fromAssets.fallbackAvatar;
-                                            },
-                                          }
-                                        : undefined
-                                    }
-                                    sx={{ width: 36, height: 36, fontSize: 14 }}
-                                  >
-                                    {!fromAssets.avatar && fromName.charAt(0).toUpperCase()}
-                                  </Avatar>
-                                  <Typography>{fromName}</Typography>
-                                </Stack>
-                              </TableCell>
-                              <TableCell>
-                                <Stack direction="row" spacing={1.5} alignItems="center">
-                                  <Avatar
-                                    src={toAssets.avatar || undefined}
-                                    alt={toName}
-                                    imgProps={
-                                      toAssets.customAvatar && toAssets.fallbackAvatar
-                                        ? {
-                                            onError: (event) => {
-                                              event.target.onerror = null;
-                                              event.target.src = toAssets.fallbackAvatar;
-                                            },
-                                          }
-                                        : undefined
-                                    }
-                                    sx={{ width: 36, height: 36, fontSize: 14 }}
-                                  >
-                                    {!toAssets.avatar && toName.charAt(0).toUpperCase()}
-                                  </Avatar>
-                                  <Typography>{toName}</Typography>
-                                </Stack>
+                        </TableHead>
+                        <TableBody>
+                          {relationshipRows.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={3}>
+                                <Typography align="center" color="text.secondary">
+                                  {relationships.length === 0
+                                    ? "No relationships yet. Create one to connect your members."
+                                    : "No relationships match your search."}
+                                </Typography>
                               </TableCell>
                             </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                          )}
+                          {relationshipRows.map((relationship) => {
+                            const fromMember = memberById.get(relationship.from) || null;
+                            const toMember = memberById.get(relationship.to) || null;
+                            const fromAssets = getMemberAvatarAssets(fromMember);
+                            const toAssets = getMemberAvatarAssets(toMember);
+                            const fromName = fromMember?.label || "Unknown";
+                            const toName = toMember?.label || "Unknown";
+                            return (
+                              <TableRow key={relationship.id}>
+                                <TableCell>
+                                  {relationship.type === "spouse"
+                                    ? "Spouses"
+                                    : relationship.type === "divorced"
+                                    ? "Divorced"
+                                    : "Parent → Child"}
+                                </TableCell>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Avatar
+                                      src={fromAssets.avatar || undefined}
+                                      alt={fromName}
+                                      imgProps={
+                                        fromAssets.customAvatar && fromAssets.fallbackAvatar
+                                          ? {
+                                              onError: (event) => {
+                                                event.target.onerror = null;
+                                                event.target.src = fromAssets.fallbackAvatar;
+                                              },
+                                            }
+                                          : undefined
+                                      }
+                                      sx={{ width: 36, height: 36, fontSize: 14 }}
+                                    >
+                                      {!fromAssets.avatar && fromName.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Typography>{fromName}</Typography>
+                                  </Stack>
+                                </TableCell>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1.5} alignItems="center">
+                                    <Avatar
+                                      src={toAssets.avatar || undefined}
+                                      alt={toName}
+                                      imgProps={
+                                        toAssets.customAvatar && toAssets.fallbackAvatar
+                                          ? {
+                                              onError: (event) => {
+                                                event.target.onerror = null;
+                                                event.target.src = toAssets.fallbackAvatar;
+                                              },
+                                            }
+                                          : undefined
+                                      }
+                                      sx={{ width: 36, height: 36, fontSize: 14 }}
+                                    >
+                                      {!toAssets.avatar && toName.charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Typography>{toName}</Typography>
+                                  </Stack>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <Box sx={{ py: 0.5 }}>
+                        {relationshipHierarchy.length === 0 ? (
+                          <Typography align="center" color="text.secondary" sx={{ py: 6 }}>
+                            Record parent-child relationships to explore the hierarchy.
+                          </Typography>
+                        ) : filteredHierarchy.length === 0 ? (
+                          <Typography align="center" color="text.secondary" sx={{ py: 6 }}>
+                            No relationships match your search in the hierarchy.
+                          </Typography>
+                        ) : (
+                          <Stack spacing={1.25} sx={{ pb: 1 }}>
+                            {filteredHierarchy.map((node) => renderHierarchyNode(node))}
+                          </Stack>
+                        )}
+                      </Box>
+                    )}
                   </Box>
                 )}
               </CardContent>
