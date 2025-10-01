@@ -394,11 +394,12 @@ function App() {
           expanded: graphExpanded,
           onToggle: handleToggleGraphExpanded,
         }}
-        network={{ containerRef }}
+        network={{ containerRef, fitNetwork, redrawNetwork }}
         memberDetail={{
           selectedMember,
           onClose: handleCloseMemberDetails,
         }}
+        onSelectMember={setSelectedMemberId}
         memberForm={memberForm}
         relationshipForm={relationshipForm}
         storageActions={{
