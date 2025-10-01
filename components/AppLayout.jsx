@@ -1,6 +1,7 @@
 ((global) => {
   const namespace =
     global.FamilyTreeComponents || (global.FamilyTreeComponents = {});
+  const React = global.React;
   const {
     AddIcon,
     DeleteIcon,
@@ -53,6 +54,101 @@
 
   const { MemberDetailPanel } = namespace;
 
+  function createParentChildHierarchy(relationships, memberById) {
+    if (!Array.isArray(relationships) || !relationships.length || !memberById) {
+      return [];
+    }
+
+    const parentRelationships = relationships.filter(
+      (relationship) => relationship.type === "parent"
+    );
+    if (parentRelationships.length === 0) {
+      return [];
+    }
+
+    const childrenByParent = new Map();
+    const parentsByChild = new Map();
+
+    parentRelationships.forEach((relationship) => {
+      const parentId = Number(relationship.from);
+      const childId = Number(relationship.to);
+      if (!Number.isFinite(parentId) || !Number.isFinite(childId)) {
+        return;
+      }
+
+      if (!childrenByParent.has(parentId)) {
+        childrenByParent.set(parentId, new Set());
+      }
+      childrenByParent.get(parentId).add(childId);
+
+      if (!parentsByChild.has(childId)) {
+        parentsByChild.set(childId, new Set());
+      }
+      parentsByChild.get(childId).add(parentId);
+    });
+
+    const buildNode = (rawMemberId, visited, depth = 0) => {
+      const memberId = Number(rawMemberId);
+      if (!Number.isFinite(memberId) || visited.has(memberId)) {
+        return null;
+      }
+      const member = memberById.get(memberId);
+      if (!member) {
+        return null;
+      }
+
+      const nextVisited = new Set(visited);
+      nextVisited.add(memberId);
+
+      const childIds = Array.from(childrenByParent.get(memberId) || []);
+      const children = childIds
+        .map((childId) => buildNode(childId, nextVisited, depth + 1))
+        .filter(Boolean);
+
+      const descendantCount = children.reduce(
+        (total, child) => total + 1 + (child.descendantCount || 0),
+        0
+      );
+
+      return {
+        id: memberId,
+        member,
+        children,
+        depth,
+        descendantCount,
+      };
+    };
+
+    const rootCandidates = Array.from(childrenByParent.keys()).filter(
+      (memberId) => !parentsByChild.has(memberId)
+    );
+    const rootIds =
+      rootCandidates.length > 0
+        ? rootCandidates
+        : Array.from(childrenByParent.keys());
+
+    const visitedRoots = new Set();
+    const hierarchy = [];
+
+    rootIds.forEach((rootId) => {
+      if (visitedRoots.has(rootId)) {
+        return;
+      }
+      const node = buildNode(rootId, new Set(), 0);
+      if (!node) {
+        return;
+      }
+      const markVisited = (current) => {
+        visitedRoots.add(current.id);
+        current.children.forEach((child) => markVisited(child));
+      };
+      markVisited(node);
+      hierarchy.push(node);
+    });
+
+    return hierarchy;
+  }
+
   function AppLayout({
     tabState,
     graphState,
@@ -67,10 +163,12 @@
     relationshipTable,
     overview,
     alert,
+    onSelectMember,
   }) {
   const { value: tab, onChange: onTabChange } = tabState;
   const { expanded: graphExpanded, onToggle: onToggleGraphExpanded } = graphState;
-  const { containerRef } = network;
+  const { containerRef, fitNetwork: fitNetworkRef, redrawNetwork: redrawNetworkRef } =
+    network;
   const { selectedMember, onClose: onCloseMemberDetail } = memberDetail;
 
   const {
@@ -145,113 +243,48 @@
   const topSpouseStat = overviewData.topSpouse || null;
   const births = overviewData.births || {};
 
-  const [relationshipView, setRelationshipView] = React.useState("table");
+  const [graphView, setGraphView] = React.useState("network");
 
-  const relationshipHierarchy = React.useMemo(() => {
-    const parentRelationships = relationships.filter(
-      (relationship) => relationship.type === "parent"
-    );
-    if (parentRelationships.length === 0) {
-      return [];
+  const graphHierarchy = React.useMemo(
+    () => createParentChildHierarchy(relationships, memberById),
+    [relationships, memberById]
+  );
+
+  const selectedMemberId = selectedMember?.id ?? null;
+
+  const handleSelectHierarchyMember = React.useCallback(
+    (memberId) => {
+      if (!onSelectMember) {
+        return;
+      }
+      const numericId = Number(memberId);
+      if (!Number.isFinite(numericId)) {
+        return;
+      }
+      onSelectMember(numericId);
+    },
+    [onSelectMember]
+  );
+
+  React.useEffect(() => {
+    if (graphView !== "network") {
+      return undefined;
     }
-
-    const childrenByParent = new Map();
-    const parentsByChild = new Map();
-
-    parentRelationships.forEach((relationship) => {
-      const parentId = Number(relationship.from);
-      const childId = Number(relationship.to);
-      if (!Number.isFinite(parentId) || !Number.isFinite(childId)) {
-        return;
-      }
-
-      if (!childrenByParent.has(parentId)) {
-        childrenByParent.set(parentId, new Set());
-      }
-      childrenByParent.get(parentId).add(childId);
-
-      if (!parentsByChild.has(childId)) {
-        parentsByChild.set(childId, new Set());
-      }
-      parentsByChild.get(childId).add(parentId);
-    });
-
-    const buildNode = (rawMemberId, visited) => {
-      const memberId = Number(rawMemberId);
-      if (!Number.isFinite(memberId) || visited.has(memberId)) {
-        return null;
-      }
-      const member = memberById.get(memberId);
-      if (!member) {
-        return null;
-      }
-
-      const nextVisited = new Set(visited);
-      nextVisited.add(memberId);
-
-      const childIds = Array.from(childrenByParent.get(memberId) || []);
-      const children = childIds
-        .map((childId) => buildNode(childId, nextVisited))
-        .filter(Boolean);
-
-      return { id: memberId, member, children, matches: false };
-    };
-
-    const rootCandidates = Array.from(childrenByParent.keys()).filter(
-      (memberId) => !parentsByChild.has(memberId)
-    );
-    const rootIds =
-      rootCandidates.length > 0
-        ? rootCandidates
-        : Array.from(childrenByParent.keys());
-
-    const visitedRoots = new Set();
-    const hierarchy = [];
-
-    rootIds.forEach((rootId) => {
-      if (visitedRoots.has(rootId)) {
-        return;
-      }
-      const node = buildNode(rootId, new Set());
-      if (!node) {
-        return;
-      }
-      const markVisited = (current) => {
-        visitedRoots.add(current.id);
-        current.children.forEach((child) => markVisited(child));
-      };
-      markVisited(node);
-      hierarchy.push(node);
-    });
-
-    return hierarchy;
-  }, [relationships, memberById]);
-
-  const filteredHierarchy = React.useMemo(() => {
-    const query = relationshipSearch.trim().toLowerCase();
-    if (!query) {
-      return relationshipHierarchy;
+    if (!redrawNetworkRef || !fitNetworkRef) {
+      return undefined;
     }
+    const timer = window.setTimeout(() => {
+      redrawNetworkRef();
+      fitNetworkRef({ animation: false });
+    }, 160);
+    return () => window.clearTimeout(timer);
+  }, [graphView, redrawNetworkRef, fitNetworkRef]);
 
-    const filterNode = (node) => {
-      const label = node.member?.label || "";
-      const matches = label.toLowerCase().includes(query);
-      const children = node.children
-        .map((child) => filterNode(child))
-        .filter(Boolean);
-      if (matches || children.length > 0) {
-        return { ...node, matches, children };
-      }
-      return null;
-    };
-
-    return relationshipHierarchy.map(filterNode).filter(Boolean);
-  }, [relationshipHierarchy, relationshipSearch]);
-
-  function renderHierarchyNode(node, depth = 0) {
+  function renderGraphHierarchyBranch(node, isRoot = false) {
     if (!node || !node.member) {
       return null;
     }
+
     const assets = getMemberAvatarAssets(node.member);
     const avatarSource = assets.avatar || undefined;
     const fallbackHandler =
@@ -263,29 +296,45 @@
             },
           }
         : undefined;
-    const isMatch = Boolean(node.matches);
     const hasChildren = node.children.length > 0;
+    const isSelected = selectedMemberId === node.id;
+
+    const nodeClassName = [
+      "graph-hierarchy-node",
+      hasChildren ? "has-children" : null,
+      isSelected ? "is-selected" : null,
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     return (
-      <Box
-        key={`${node.id}-${depth}`}
-        sx={{
-          position: "relative",
-          pl: depth === 0 ? 0 : 2.5,
-          ml: depth === 0 ? 0 : 1.5,
-          borderLeft:
-            depth === 0 ? "none" : "1px dashed rgba(79, 70, 229, 0.35)",
-        }}
+      <li
+        key={`${node.id}-${node.depth}`}
+        className={`graph-hierarchy-item${isRoot ? " graph-hierarchy-root" : ""}`}
       >
         <Stack
+          component="button"
+          type="button"
           direction="row"
           spacing={1.5}
           alignItems="center"
+          onClick={() => handleSelectHierarchyMember(node.id)}
+          className={nodeClassName}
           sx={{
-            py: 0.75,
-            px: 1,
-            borderRadius: 2,
-            bgcolor: isMatch ? "rgba(79, 70, 229, 0.12)" : "transparent",
+            border: "1px solid rgba(148, 163, 184, 0.45)",
+            borderRadius: 2.5,
+            px: 2.5,
+            py: 1.75,
+            minWidth: { xs: 180, md: 200 },
+            maxWidth: { xs: 220, md: 240 },
+            mx: "auto",
+            backgroundColor: "#ffffff",
+            boxShadow: "0 12px 24px -20px rgba(15, 23, 42, 0.45)",
+            textAlign: "left",
+            font: "inherit",
+            cursor: "pointer",
+            transition: "transform 0.18s ease, box-shadow 0.18s ease",
+            outline: "none",
           }}
         >
           <Avatar
@@ -293,23 +342,24 @@
             alt={node.member.label}
             imgProps={fallbackHandler}
             sx={{
-              width: 36,
-              height: 36,
-              fontSize: 14,
+              width: 44,
+              height: 44,
+              fontSize: 16,
               boxShadow: hasChildren
-                ? "0 0 0 3px rgba(79, 70, 229, 0.22)"
-                : "0 0 0 3px rgba(14, 165, 233, 0.2)",
+                ? "0 0 0 3px rgba(79, 70, 229, 0.28)"
+                : "0 0 0 3px rgba(14, 165, 233, 0.24)",
             }}
           >
             {!avatarSource && node.member.label.charAt(0).toUpperCase()}
           </Avatar>
           <Box>
-            <Typography sx={{ fontWeight: isMatch ? 700 : 600 }}>
+            <Typography sx={{ fontWeight: isSelected ? 700 : 600, fontSize: 15 }}>
               {node.member.label}
             </Typography>
             {hasChildren ? (
               <Typography variant="caption" color="text.secondary">
-                Parent of {node.children.length}{" "}
+                {node.children.length} direct
+                {" "}
                 {node.children.length === 1 ? "child" : "children"}
               </Typography>
             ) : node.member.attributes?.lifeStatus ? (
@@ -317,10 +367,17 @@
                 {node.member.attributes.lifeStatus}
               </Typography>
             ) : null}
+            {node.descendantCount > node.children.length && (
+              <Typography variant="caption" color="text.secondary">
+                {node.descendantCount} total descendants
+              </Typography>
+            )}
           </Box>
         </Stack>
-        {node.children.map((child) => renderHierarchyNode(child, depth + 1))}
-      </Box>
+        {hasChildren && (
+          <ul>{node.children.map((child) => renderGraphHierarchyBranch(child))}</ul>
+        )}
+      </li>
     );
   }
 
@@ -333,7 +390,7 @@
   } else if (tab === "graph") {
     tabHeading = "Family Graph";
     tabDescription =
-      "Explore the family network and tap on people to view their story.";
+      "Explore the family network or switch to a hierarchy to follow generations.";
   } else if (tab === "members") {
     tabHeading = "Members Directory";
     tabDescription =
@@ -857,24 +914,56 @@
                     </Typography>
                   </Box>
                   {tab === "graph" && (
-                    <Button
-                      variant={graphExpanded ? "contained" : "outlined"}
-                      color="secondary"
-                      startIcon={
-                        graphExpanded ? (
-                          <CollapseIcon fontSize="small" />
-                        ) : (
-                          <ExpandIcon fontSize="small" />
-                        )
-                      }
-                      onClick={onToggleGraphExpanded}
+                    <Stack
+                      direction={{ xs: "column", md: "row" }}
+                      spacing={1}
+                      alignItems={{ xs: "stretch", md: "center" }}
                       sx={{
                         alignSelf: { xs: "stretch", sm: "flex-start" },
-                        whiteSpace: "nowrap",
+                        width: { xs: "100%", sm: "auto" },
                       }}
                     >
-                      {graphExpanded ? "Collapse graph" : "Expand graph"}
-                    </Button>
+                      <ToggleButtonGroup
+                        value={graphView}
+                        exclusive
+                        size="small"
+                        color="primary"
+                        onChange={(event, value) => {
+                          if (value) {
+                            setGraphView(value);
+                          }
+                        }}
+                        sx={{
+                          borderRadius: 9999,
+                          '& .MuiToggleButton-root': {
+                            textTransform: "none",
+                            fontWeight: 500,
+                            px: 2.25,
+                          },
+                        }}
+                      >
+                        <ToggleButton value="network">Network</ToggleButton>
+                        <ToggleButton value="hierarchy">Hierarchy</ToggleButton>
+                      </ToggleButtonGroup>
+                      <Button
+                        variant={graphExpanded ? "contained" : "outlined"}
+                        color="secondary"
+                        startIcon={
+                          graphExpanded ? (
+                            <CollapseIcon fontSize="small" />
+                          ) : (
+                            <ExpandIcon fontSize="small" />
+                          )
+                        }
+                        onClick={onToggleGraphExpanded}
+                        sx={{
+                          whiteSpace: "nowrap",
+                          px: 2.5,
+                        }}
+                      >
+                        {graphExpanded ? "Collapse graph" : "Expand graph"}
+                      </Button>
+                    </Stack>
                   )}
                 </Stack>
 
@@ -1186,27 +1275,76 @@
                         flexDirection: "column",
                       }}
                     >
-                      <div ref={containerRef} className="network-surface" />
-                      {!selectedMember && (
-                        <Box
-                          sx={{
-                            position: "absolute",
-                            bottom: { xs: 16, md: 20 },
-                            left: { xs: 16, md: 24 },
-                            right: { xs: 16, md: "auto" },
-                            maxWidth: { xs: "100%", md: 320 },
-                            bgcolor: "rgba(15, 23, 42, 0.82)",
-                            color: "#f8fafc",
-                            px: 2,
-                            py: 1.25,
-                            borderRadius: 2,
-                            fontSize: 13,
-                            letterSpacing: 0.1,
-                            boxShadow: 6,
-                            pointerEvents: "none",
-                          }}
-                        >
-                          Tip: tap or click a family member to open their story panel.
+                      {graphView === "network" ? (
+                        <>
+                          <div ref={containerRef} className="network-surface" />
+                          {!selectedMember && (
+                            <Box
+                              sx={{
+                                position: "absolute",
+                                bottom: { xs: 16, md: 20 },
+                                left: { xs: 16, md: 24 },
+                                right: { xs: 16, md: "auto" },
+                                maxWidth: { xs: "100%", md: 320 },
+                                bgcolor: "rgba(15, 23, 42, 0.82)",
+                                color: "#f8fafc",
+                                px: 2,
+                                py: 1.25,
+                                borderRadius: 2,
+                                fontSize: 13,
+                                letterSpacing: 0.1,
+                                boxShadow: 6,
+                                pointerEvents: "none",
+                              }}
+                            >
+                              Tip: tap or click a family member to open their story panel.
+                            </Box>
+                          )}
+                        </>
+                      ) : (
+                        <Box sx={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                          <Box
+                            sx={{
+                              px: { xs: 2.5, md: 3 },
+                              py: { xs: 2, md: 2.25 },
+                              borderBottom: "1px solid rgba(148, 163, 184, 0.4)",
+                              background:
+                                "linear-gradient(135deg, rgba(79, 70, 229, 0.08), rgba(14, 165, 233, 0.08))",
+                            }}
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                              Generational hierarchy
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Drag sideways or downward to explore branches. Select a person to open their story panel.
+                            </Typography>
+                          </Box>
+                          <Box className="graph-hierarchy-scroll">
+                            {graphHierarchy.length === 0 ? (
+                              <Box
+                                sx={{
+                                  flex: 1,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  textAlign: "center",
+                                  px: 3,
+                                }}
+                              >
+                                <Typography color="text.secondary">
+                                  Record parent-child relationships to visualize the family hierarchy.
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Box className="graph-hierarchy-root-list">
+                                {graphHierarchy.map((root) => (
+                                  <ul key={`hierarchy-root-${root.id}`} className="graph-hierarchy-tree">
+                                    {renderGraphHierarchyBranch(root, true)}
+                                  </ul>
+                                ))}
+                              </Box>
+                            )}
+                          </Box>
                         </Box>
                       )}
                     </Paper>
@@ -1547,7 +1685,7 @@
                     <Box
                       sx={{
                         display: "flex",
-                        justifyContent: "space-between",
+                        justifyContent: "flex-start",
                         alignItems: "center",
                         flexWrap: "wrap",
                         gap: 1.5,
@@ -1571,133 +1709,92 @@
                         }}
                         sx={{ minWidth: { xs: "100%", sm: 260 }, maxWidth: 360 }}
                       />
-                      <ToggleButtonGroup
-                        value={relationshipView}
-                        exclusive
-                        color="primary"
-                        size="small"
-                        onChange={(event, value) => {
-                          if (value) {
-                            setRelationshipView(value);
-                          }
-                        }}
-                        sx={{
-                          ml: { xs: 0, md: "auto" },
-                          borderRadius: 9999,
-                          '& .MuiToggleButton-root': {
-                            textTransform: "none",
-                            fontWeight: 500,
-                            px: 2.25,
-                          },
-                        }}
-                      >
-                        <ToggleButton value="table">Table</ToggleButton>
-                        <ToggleButton value="hierarchy">Hierarchy</ToggleButton>
-                      </ToggleButtonGroup>
                     </Box>
-                    {relationshipView === "table" ? (
-                      <Table size="medium">
-                        <TableHead>
+                    <Table size="medium">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Type</TableCell>
+                          <TableCell>From</TableCell>
+                          <TableCell>To</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {relationshipRows.length === 0 && (
                           <TableRow>
-                            <TableCell>Type</TableCell>
-                            <TableCell>From</TableCell>
-                            <TableCell>To</TableCell>
+                            <TableCell colSpan={3}>
+                              <Typography align="center" color="text.secondary">
+                                {relationships.length === 0
+                                  ? "No relationships yet. Create one to connect your members."
+                                  : "No relationships match your search."}
+                              </Typography>
+                            </TableCell>
                           </TableRow>
-                        </TableHead>
-                        <TableBody>
-                          {relationshipRows.length === 0 && (
-                            <TableRow>
-                              <TableCell colSpan={3}>
-                                <Typography align="center" color="text.secondary">
-                                  {relationships.length === 0
-                                    ? "No relationships yet. Create one to connect your members."
-                                    : "No relationships match your search."}
-                                </Typography>
+                        )}
+                        {relationshipRows.map((relationship) => {
+                          const fromMember = memberById.get(relationship.from) || null;
+                          const toMember = memberById.get(relationship.to) || null;
+                          const fromAssets = getMemberAvatarAssets(fromMember);
+                          const toAssets = getMemberAvatarAssets(toMember);
+                          const fromName = fromMember?.label || "Unknown";
+                          const toName = toMember?.label || "Unknown";
+                          return (
+                            <TableRow key={relationship.id}>
+                              <TableCell>
+                                {relationship.type === "spouse"
+                                  ? "Spouses"
+                                  : relationship.type === "divorced"
+                                  ? "Divorced"
+                                  : "Parent → Child"}
+                              </TableCell>
+                              <TableCell>
+                                <Stack direction="row" spacing={1.5} alignItems="center">
+                                  <Avatar
+                                    src={fromAssets.avatar || undefined}
+                                    alt={fromName}
+                                    imgProps={
+                                      fromAssets.customAvatar && fromAssets.fallbackAvatar
+                                        ? {
+                                            onError: (event) => {
+                                              event.target.onerror = null;
+                                              event.target.src = fromAssets.fallbackAvatar;
+                                            },
+                                          }
+                                        : undefined
+                                    }
+                                    sx={{ width: 36, height: 36, fontSize: 14 }}
+                                  >
+                                    {!fromAssets.avatar && fromName.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                  <Typography>{fromName}</Typography>
+                                </Stack>
+                              </TableCell>
+                              <TableCell>
+                                <Stack direction="row" spacing={1.5} alignItems="center">
+                                  <Avatar
+                                    src={toAssets.avatar || undefined}
+                                    alt={toName}
+                                    imgProps={
+                                      toAssets.customAvatar && toAssets.fallbackAvatar
+                                        ? {
+                                            onError: (event) => {
+                                              event.target.onerror = null;
+                                              event.target.src = toAssets.fallbackAvatar;
+                                            },
+                                          }
+                                        : undefined
+                                    }
+                                    sx={{ width: 36, height: 36, fontSize: 14 }}
+                                  >
+                                    {!toAssets.avatar && toName.charAt(0).toUpperCase()}
+                                  </Avatar>
+                                  <Typography>{toName}</Typography>
+                                </Stack>
                               </TableCell>
                             </TableRow>
-                          )}
-                          {relationshipRows.map((relationship) => {
-                            const fromMember = memberById.get(relationship.from) || null;
-                            const toMember = memberById.get(relationship.to) || null;
-                            const fromAssets = getMemberAvatarAssets(fromMember);
-                            const toAssets = getMemberAvatarAssets(toMember);
-                            const fromName = fromMember?.label || "Unknown";
-                            const toName = toMember?.label || "Unknown";
-                            return (
-                              <TableRow key={relationship.id}>
-                                <TableCell>
-                                  {relationship.type === "spouse"
-                                    ? "Spouses"
-                                    : relationship.type === "divorced"
-                                    ? "Divorced"
-                                    : "Parent → Child"}
-                                </TableCell>
-                                <TableCell>
-                                  <Stack direction="row" spacing={1.5} alignItems="center">
-                                    <Avatar
-                                      src={fromAssets.avatar || undefined}
-                                      alt={fromName}
-                                      imgProps={
-                                        fromAssets.customAvatar && fromAssets.fallbackAvatar
-                                          ? {
-                                              onError: (event) => {
-                                                event.target.onerror = null;
-                                                event.target.src = fromAssets.fallbackAvatar;
-                                              },
-                                            }
-                                          : undefined
-                                      }
-                                      sx={{ width: 36, height: 36, fontSize: 14 }}
-                                    >
-                                      {!fromAssets.avatar && fromName.charAt(0).toUpperCase()}
-                                    </Avatar>
-                                    <Typography>{fromName}</Typography>
-                                  </Stack>
-                                </TableCell>
-                                <TableCell>
-                                  <Stack direction="row" spacing={1.5} alignItems="center">
-                                    <Avatar
-                                      src={toAssets.avatar || undefined}
-                                      alt={toName}
-                                      imgProps={
-                                        toAssets.customAvatar && toAssets.fallbackAvatar
-                                          ? {
-                                              onError: (event) => {
-                                                event.target.onerror = null;
-                                                event.target.src = toAssets.fallbackAvatar;
-                                              },
-                                            }
-                                          : undefined
-                                      }
-                                      sx={{ width: 36, height: 36, fontSize: 14 }}
-                                    >
-                                      {!toAssets.avatar && toName.charAt(0).toUpperCase()}
-                                    </Avatar>
-                                    <Typography>{toName}</Typography>
-                                  </Stack>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    ) : (
-                      <Box sx={{ py: 0.5 }}>
-                        {relationshipHierarchy.length === 0 ? (
-                          <Typography align="center" color="text.secondary" sx={{ py: 6 }}>
-                            Record parent-child relationships to explore the hierarchy.
-                          </Typography>
-                        ) : filteredHierarchy.length === 0 ? (
-                          <Typography align="center" color="text.secondary" sx={{ py: 6 }}>
-                            No relationships match your search in the hierarchy.
-                          </Typography>
-                        ) : (
-                          <Stack spacing={1.25} sx={{ pb: 1 }}>
-                            {filteredHierarchy.map((node) => renderHierarchyNode(node))}
-                          </Stack>
-                        )}
-                      </Box>
-                    )}
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </Box>
                 )}
               </CardContent>
